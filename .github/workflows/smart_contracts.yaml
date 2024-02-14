@@ -16,6 +16,13 @@ on:
       - "README.md"
 
 jobs:
+  dump_context:
+    runs-on: "ubuntu-latest"
+    steps:
+      - shell: "sh"
+        run: 'echo "${github_ctx}"'
+        env:
+          github_ctx: "${{ toJSON(github) }}"
   check_deps_versions:
     runs-on: "ubuntu-latest"
     if: "github.event_name == 'tag'"
