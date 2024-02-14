@@ -23,6 +23,18 @@ jobs:
         run: 'echo "${github_ctx}"'
         env:
           github_ctx: "${{ toJSON(github) }}"
+  if_tag:
+    runs-on: "ubuntu-latest"
+    if: "${{ github.ref_type }} == 'tag'"
+    steps:
+      - shell: "sh"
+        run: 'echo "Ran of tag"'
+  if_eval_tag:
+    runs-on: "ubuntu-latest"
+    if: "${{ fromJSON(github.ref_type) }} == 'tag'"
+    steps:
+      - shell: "sh"
+        run: 'echo "Ran with eval tag"'
   check_deps_versions:
     runs-on: "ubuntu-latest"
     if: "github.event_name == 'tag'"
