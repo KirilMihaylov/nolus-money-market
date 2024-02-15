@@ -5,7 +5,14 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[package.metadata.cargo-each.combinations]]
+groups = ["build", "@agnostic"]
+always-on = ["contract"]
+include-rest = false
+
+[[package.metadata.cargo-each.combinations]]
+groups = ["ci", "@agnostic"]
+include-rest = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -26,7 +33,6 @@ cosmwasm-std = { workspace = true, optional = true }
 
 thiserror = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-semver = "1"
 
 [dev-dependencies]
 schema = { workspace = true }

@@ -5,21 +5,25 @@ authors = ["The Dev Nolus Team <dev@nolus.io>"]
 edition.workspace = true
 license.workspace = true
 
+[[package.metadata.cargo-each.combinations]]
+groups = ["ci", "@agnostic"]
+include-rest = true
+
 [features]
 testing = ["currency/testing", "finance/testing", "sdk/testing"]
 
 [dependencies]
-currency = { workspace = true }
-finance = { workspace = true }
+currency.workspace = true
+finance.workspace = true
 sdk = { workspace = true, features = ["cosmos", "cosmos_ibc", "neutron"] }
 
-prost = { workspace = true }
-thiserror = { workspace = true }
-serde = { workspace = true }
+prost.workspace = true
+thiserror.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 currency = { workspace = true, features = ["testing"] }
 finance = { workspace = true, features = ["testing"] }
 sdk = { workspace = true, features = ["testing"] }
 
-base64 = { workspace = true }
+base64.workspace = true

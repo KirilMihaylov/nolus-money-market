@@ -38,8 +38,8 @@ pub fn instantiate(
 ) -> ContractResult<CwResponse> {
     versioning::initialize(deps.storage, CONTRACT_VERSION)?;
 
-    // cannot validate the address since the Admin plays the role of the registry
-    // and it is not yet instantiated
+    // cannot validate the address since the Admin plays the role of the
+    // registry, which is not yet instantiated
     deps.api.addr_validate(msg.protocols_registry.as_str())?;
     platform::contract::validate_addr(deps.querier, &msg.timealarms)?;
     platform::contract::validate_addr(deps.querier, &msg.treasury)?;

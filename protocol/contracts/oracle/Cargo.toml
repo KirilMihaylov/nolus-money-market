@@ -5,7 +5,43 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[package.metadata.cargo-each.combinations]]
+groups = ["build", "$net", "$protocol"]
+always-on = ["contract", "$net", "$protocol"]
+include-rest = false
+[package.metadata.cargo-each.combinations.generics]
+"$net" = "net"
+"$protocol" = "protocol"
+
+[[package.metadata.cargo-each.combinations]]
+groups = ["ci", "$net", "$protocol"]
+sets = ["net", "protocol", "$contract-or-testing-or-stubs"]
+always-on = ["$net", "$protocol"]
+include-rest = false
+[package.metadata.cargo-each.combinations.generics]
+"$net" = "net"
+"$protocol" = "protocol"
+"$contract-or-testing-or-stubs" = ["contract-and-testing", "stubs"]
+
+[package.metadata.cargo-each.sets.net]
+members = ["net_dev", "net_test", "net_main"]
+at-least-one = true
+mutually-exclusive = true
+
+[package.metadata.cargo-each.sets.protocol]
+members = ["neutron-astroport-usdc_axelar", "osmosis-osmosis-usdc_axelar", "osmosis-osmosis-usdc_noble"]
+at-least-one = true
+mutually-exclusive = true
+
+[package.metadata.cargo-each.sets.contract-and-testing]
+members = ["contract", "testing"]
+at-least-one = true
+mutually-exclusive = false
+
+[package.metadata.cargo-each.sets.stubs]
+members = ["stub_alarms", "stub_swap"]
+at-least-one = false
+mutually-exclusive = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]

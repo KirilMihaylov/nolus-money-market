@@ -1,5 +1,6 @@
-/*/target/
-/tests/
 /.dockerignore
+/artifacts/
+/tests/
 /Containerfile
-/**/rust-toolchain.toml
+**/target/
+**/rust-toolchain.toml

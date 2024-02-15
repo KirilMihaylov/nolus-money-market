@@ -5,7 +5,18 @@ edition = "2021"
 authors = ["The Dev Nolus Team <dev@nolus.io>"]
 license = "Apache-2.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[package.metadata.cargo-each.combinations]]
+groups = ["ci", "net_main", "$protocol"]
+sets = ["protocol"]
+always-on = ["$protocol"]
+include-rest = true
+[package.metadata.cargo-each.combinations.generics]
+"$protocol" = "protocol"
+
+[package.metadata.cargo-each.sets.protocol]
+members = ["neutron-astroport-usdc_axelar", "osmosis-osmosis-usdc_axelar", "osmosis-osmosis-usdc_noble"]
+at-least-one = true
+mutually-exclusive = true
 
 [features]
 neutron-astroport-usdc_axelar = ["lease/neutron-astroport-usdc_axelar", "profit/neutron-astroport-usdc_axelar"]
@@ -39,12 +50,6 @@ anyhow = "1"
 thiserror = "1"
 serde = { version = "1", features = ["derive"] }
 
-[profile.release]
-opt-level = "s"
-debug = false
-strip = "symbols"
-rpath = false
-lto = true
+[profile.dev_no_debug_assertions]
+inherits = "dev"
 debug-assertions = false
-panic = "abort"
-overflow-checks = true

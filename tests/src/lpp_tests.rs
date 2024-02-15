@@ -472,7 +472,7 @@ fn deposit_and_withdraw() {
             lender2.clone(),
             test_case.address_book.lpp().clone(),
             &LppExecuteMsg::Burn {
-                amount: (rest_nlpn).into(),
+                amount: rest_nlpn.into(),
             },
             &[],
         )

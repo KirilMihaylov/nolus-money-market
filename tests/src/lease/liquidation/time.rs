@@ -105,7 +105,7 @@ fn liquidation_time_alarm(
             .query()
             .query_all_balances(lease_addr.clone())
             .unwrap(),
-        &[],
+        &[] as &[CwCoin],
     );
 
     let liquidation_attributes: HashMap<String, String> = liquidation_end_response

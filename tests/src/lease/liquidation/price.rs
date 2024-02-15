@@ -143,7 +143,7 @@ fn full_liquidation() {
             .query()
             .query_all_balances(lease_addr.clone())
             .unwrap(),
-        &[],
+        &[] as &[CwCoin],
     );
 
     let state = lease_mod::state_query(&test_case, lease_addr.as_str());

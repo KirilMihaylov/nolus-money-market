@@ -9,21 +9,21 @@
 6. There are dependencies to services or features provided by the layer 1. They cannot be expressed explicitly as Cargo dependencies.
 
 ## Contracts
-7. Each Cargo contract package defines one and only one CosmWasm contract.
-8. The format of the persistent data of a contract is tagged with a storage version. It is denoted with a monotonically increased unsigned integer beginning with zero.
-9. A contract version is a pair of its storage and Cargo package versions. Let's denote with `V` contract versions, with `S` storage versions and with `P` package versions.
-10. An update of the storage version must be accompanied by an update of the Cargo package version.
-11. `V1 = <S1,P1>` *is-before* `V2 = <S2,P2>` only when `S1 < S2` or `S1 == S2 && V1 < V2`
+1. Each Cargo contract package defines one and only one CosmWasm contract.
+2. The format of the persistent data of a contract is tagged with a storage version. It is denoted with a monotonically increased unsigned integer beginning with zero.
+3. A contract version is a pair of its storage and Cargo package versions. Let's denote with `V` contract versions, with `S` storage versions and with `P` package versions.
+4. An update of the storage version must be accompanied by an update of the Cargo package version.
+5. `V1 = <S1,P1>` *is-before* `V2 = <S2,P2>` only when `S1 < S2` or `S1 == S2 && V1 < V2`
 
 ## Releases
-12. A new release is always associated with a Git Tag. The opposite is not mandatory although highly recommended.
-13. Releases are **immutable**. Any modifications to the code of a released package must be released as a new version and included in the next release.
-14. A new release encompasses the latest versions of each Cargo package either new ones or the same as they have appeared in the previous release. This uniquely defines the versions of contracts included in a release.
-15. The only supported release updates are from the previous to the next release. An update to a newer release should be performed sequentially, one by one.
+1. A new release is always associated with a Git Tag. The opposite is not mandatory although highly recommended.
+2. Releases are **immutable**. Any modifications to the code of a released package must be released as a new version and included in the next release.
+3. A new release encompasses the latest versions of each Cargo package either new ones or the same as they have appeared in the previous release. This uniquely defines the versions of contracts included in a release.
+4. The only supported release updates are from the previous to the next release. An update to a newer release should be performed sequentially, one by one.
 
 ## Networks
-16. Each Nolus Network runs a specific release. A direct corollary is that a network runs the contract versions as they appear in the release.
-17. Ideally, an update to а new release should happen atomically to guarantee high availability of the services.
+1. Each Nolus Network runs a specific release. A direct corollary is that a network runs the contract versions as they appear in the release.
+2. Ideally, an update to а new release should happen atomically to guarantee high availability of the services.
 
 # Process
 ## Building release notes

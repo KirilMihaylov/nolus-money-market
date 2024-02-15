@@ -111,8 +111,9 @@ impl Ratio<Units> for Rational<Percent> {
 impl Display for Percent {
     #[track_caller]
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        let whole = (self.0) / Self::UNITS_TO_PERCENT_RATIO;
-        let fractional = (self.0)
+        let whole = self.0 / Self::UNITS_TO_PERCENT_RATIO;
+        let fractional = self
+            .0
             .checked_rem(Self::UNITS_TO_PERCENT_RATIO)
             .expect("zero divider");
 

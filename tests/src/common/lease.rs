@@ -229,7 +229,7 @@ pub(crate) fn complete_initialization<DownpaymentC, Lpn>(
             .query_all_balances(lease_addr.clone())
             .unwrap()
             .as_slice(),
-        [],
+        &[] as &[CwCoin],
     );
 
     () = super::swap::do_swap(
