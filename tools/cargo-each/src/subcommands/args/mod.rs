@@ -62,7 +62,7 @@ enum Subcommand {
             help = "Indicates at most one combination will be selected."
         )]
         exact: bool,
-        #[arg(short = 'x', long)]
+        #[arg(short = 'x', long, visible_alias = "external")]
         external_command: bool,
         #[arg(long, visible_alias = "debug")]
         print_command: bool,
