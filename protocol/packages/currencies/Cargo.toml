@@ -27,3 +27,11 @@ serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 currency = { workspace = true, features = ["testing"] }
+
+[build-dependencies]
+protocol = { workspace = true }
+
+topology = { workspace = true }
+
+anyhow = { workspace = true }
+serde_json = { workspace = true }
