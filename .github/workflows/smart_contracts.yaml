@@ -16,11 +16,17 @@ on:
       - "*"
     paths-ignore:
       - "**/*.md"
+      - "./scripts/common/**"
+      - "./scripts/deploy-*.sh"
+      - "./scripts/export-*.sh"
   pull_request:
     branches:
       - "main"
     paths-ignore:
       - "**/*.md"
+      - "./scripts/common/**"
+      - "./scripts/deploy-*.sh"
+      - "./scripts/export-*.sh"
 
 concurrency:
   cancel-in-progress: true
