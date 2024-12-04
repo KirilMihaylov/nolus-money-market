@@ -2,7 +2,7 @@
 ##                         START : EDIT  HERE : START                         ##
 ################################################################################
 
-ARG rust_ver="1.82-slim"
+ARG rust_ver="1.83-slim"
 
 ARG platform_contracts_count="3"
 
