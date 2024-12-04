@@ -152,6 +152,7 @@ RUN --mount=type=bind,source="./",target="/code/",readonly \
     readonly tag_commit && \
     described="$("git" "describe" --tags --dirty)" && \
     readonly described && \
+    "git" "status" && \
     "git" "config" --global --unset "core.excludeFile" && \
     "printf" \
       "tag=%s / %s" \
