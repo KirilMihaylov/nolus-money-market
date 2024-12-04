@@ -118,7 +118,8 @@ ARG binaryen_ver="version_119"
 
 LABEL binaryen_ver="${binaryen_ver:?}"
 
-RUN "echo" \
+RUN "printf" \
+    "%s" \
     "${binaryen_ver}" \
     >"/binaryen-version.txt"
 
