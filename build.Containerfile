@@ -67,47 +67,47 @@ RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
 
 ARG platform_contracts_count
 
-ARG protocol_contracts_count
-
-ARG test_network_build_profile
-
-ARG test_network_max_binary_size
-
-ARG production_network_build_profile
-
-ARG production_network_max_binary_size
-
-ARG cosmwasm_capabilities
-
 RUN "printf" \
     "%d" \
     "${platform_contracts_count:?}" \
     >"/configuration/platform-contracts-count"
+
+ARG protocol_contracts_count
 
 RUN "printf" \
     "%d" \
     "${protocol_contracts_count:?}" \
     >"/configuration/protocol-contracts-count"
 
+ARG test_network_build_profile
+
 RUN "printf" \
     "%s" \
     "${test_network_build_profile:?}" \
     >"/build-profiles/test-net"
+
+ARG test_network_max_binary_size
 
 RUN "printf" \
     "%s" \
     "${test_network_max_binary_size:?}" \
     >"/configuration/test-net-max-binary-size"
 
+ARG production_network_build_profile
+
 RUN "printf" \
     "%s" \
     "${production_network_build_profile:?}" \
     >"/build-profiles/production-net"
 
+ARG production_network_max_binary_size
+
 RUN "printf" \
     "%s" \
     "${production_network_max_binary_size:?}" \
     >"/configuration/production-net-max-binary-size"
+
+ARG cosmwasm_capabilities
 
 RUN "printf" \
     "%s" \
