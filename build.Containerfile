@@ -39,8 +39,9 @@ ENV CARGO_TARGET_DIR="${cargo_target_dir:?}"
 
 WORKDIR "/"
 
-RUN "$("rustup" "which" "rustc")" \
-    --version \
+RUN rustc_bin="$("rustup" "which" "rustc")" && \
+    "${rustc_bin:?}" \
+      --version \
     >"/rust-version.txt"
 
 RUN ["mkdir", "-m", "0555", "/build/"]
