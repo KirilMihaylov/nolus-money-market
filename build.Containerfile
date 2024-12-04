@@ -125,18 +125,21 @@ RUN "printf" \
     >"/binaryen-version.txt"
 
 RUN --mount=type=cache,id="${binaryen_ver:?}",target="/binaryen/",sharing="locked" \
-  "[" "-f" "/binaryen/binaryen.tar.gz" "]" || \
-    "wget" "-O" "/binaryen/binaryen.tar.gz" "https://github.com/WebAssembly/\
-binaryen/releases/download/${binaryen_ver:?}/binaryen-${binaryen_ver:?}-x86_64-\
-linux.tar.gz"
+  if ! "[" "-f" "/binaryen/binaryen.tar.gz" "]"; \
+  then \
+    "wget" \
+      "-O" "/binaryen/binaryen.tar.gz" \
+      "https://github.com/WebAssembly/binaryen/releases/download/\
+${binaryen_ver:?}/binaryen-${binaryen_ver:?}-x86_64-linux.tar.gz"; \
+  fi
 
 RUN --mount=type=cache,id="${binaryen_ver:?}",target="/binaryen/",sharing="locked" \
-  "[" "-d" "/binaryen/binaryen" "]" || \
-    ( \
-      cd "/binaryen/" && \
-        "tar" "-xf" "./binaryen.tar.gz" && \
-        "mv" "./binaryen-${binaryen_ver:?}" "./binaryen" \
-    )
+  if ! "[" "-d" "/binaryen/binaryen" "]"; \
+  then \
+    cd "/binaryen/" && \
+      "tar" -x -f "./binaryen.tar.gz" && \
+      "mv" "./binaryen-${binaryen_ver:?}" "./binaryen"; \
+  fi
 
 RUN --mount=type=cache,id="${binaryen_ver:?}",target="/binaryen/",sharing="locked",readonly \
   ["cp", "/binaryen/binaryen/bin/wasm-opt", "/usr/bin/"]
