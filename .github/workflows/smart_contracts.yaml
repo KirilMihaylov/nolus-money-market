@@ -17,6 +17,7 @@ on:
   push:
     branches:
       - "main"
+      - "KirilMihaylov/*"
     tags:
       - "*"
     paths-ignore:
@@ -44,9 +45,25 @@ env:
   upload-artifacts: |-
     ${{ toJSON(github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.upload-artifacts)) }}
 
+permissions:
+  actions: "none"
+  attestations: "none"
+  checks: "none"
+  contents: "read"
+  deployments: "none"
+  discussions: "none"
+  id-token: "none"
+  issues: "none"
+  packages: "none"
+  pages: "none"
+  pull-requests: "none"
+  repository-projects: "none"
+  security-events: "none"
+  statuses: "none"
+
 jobs:
   load-configuration:
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     name: "Load configuration"
     outputs:
       dex-types-json: |-
@@ -124,7 +141,7 @@ jobs:
           EOF" \
             >>"${GITHUB_OUTPUT}"
   prepare_tool_caches:
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     strategy:
       fail-fast: true
       matrix:
@@ -154,7 +171,7 @@ jobs:
   check-lock-files:
     needs:
       - "load-configuration"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     strategy:
       fail-fast: true
       matrix:
@@ -177,7 +194,7 @@ jobs:
       - "load-configuration"
       - "prepare_tool_caches"
       - "check-lock-files"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     strategy:
       fail-fast: true
       matrix:
@@ -221,7 +238,7 @@ jobs:
       - "load-configuration"
       - "prepare_tool_caches"
       - "check-lock-files"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     strategy:
       fail-fast: true
       matrix:
@@ -272,7 +289,7 @@ jobs:
       - "load-configuration"
       - "prepare_tool_caches"
       - "check-lock-files"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     strategy:
       fail-fast: true
       matrix:
@@ -331,7 +348,7 @@ jobs:
       - "load-configuration"
       - "prepare_tool_caches"
       - "check-lock-files"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     strategy:
       fail-fast: true
       matrix:
@@ -384,13 +401,13 @@ jobs:
             "./${workspace:?}" \
             "${dex_type:?}" \
             "${profile:?}"
-  build:
+  build_images:
     needs:
       - "workspace_check"
       - "instance_lint"
       - "instance_check_deps"
       - "instance_tests"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     name: "Build platform binaries and protocol container image"
     steps:
       - name: "Checkout repository"
@@ -398,152 +415,188 @@ jobs:
         with:
           fetch-depth: "0"
           fetch-tags: "true"
-      - id: "builder-base-container-cache-key"
-        env:
-          check_deps_updated: |-
-            ${{ toJSON(env.check-dependencies-versions) }}
+      - id: "container-cache-epoch"
         run: |-
-          echo \
-            "cache-key<<EOF
-          builder-base-container-[check-deps=${check_deps_updated:?}]
+          set -eu
+
+          epoch="$(
+            "date" \
+              -u \
+              "+%W-%Y"
+          )"
+
+          "echo" \
+            "epoch<<EOF
+          ${epoch:?}
+          EOF" \
+            >>"${GITHUB_OUTPUT:?}"
+      - id: "cosmwasm-check-version"
+        name: "Fetch latest `cosmwasm-check` version"
+        run: |-
+          set -eu
+
+          cosmwasm_check_version="$(
+            CARGO_TERM_COLOR="never" \
+              "cargo" \
+              "info" \
+              "cosmwasm-check"
+          )"
+          cosmwasm_check_version="$(
+            "grep" \
+              "^version: " \
+              <<EOF
+          ${cosmwasm_check_version:?}
+          EOF
+          )"
+          cosmwasm_check_version="$(
+            "tail" \
+              -n "1" \
+              <<EOF
+          ${cosmwasm_check_version:?}
+          EOF
+          )"
+          cosmwasm_check_version="$(
+            "sed" \
+              -e "s/^version: //g" \
+              <<EOF
+          ${cosmwasm_check_version:?}
+          EOF
+          )"
+
+          "echo" \
+            "cosmwasm-check-version<<EOF
+          ${cosmwasm_check_version:?}
           EOF" \
             >>"${GITHUB_OUTPUT}"
-      - id: "restore-builder-base-container-cache"
-        name: "Restore builder base image from cache"
-        uses: "actions/cache/restore@v4"
+      - name: "Setup Buildkit"
+        uses: "docker/setup-buildx-action@v3"
         with:
-          key: |-
-            ${{ steps.builder-base-container-cache-key.outputs.cache-key }}
-          path: |-
-            builder-base-container.tar
-      - if: |-
-          !steps.restore-builder-base-container-cache.outputs.cache-hit
-        name: "Build builder base image"
+          cache-binary: "true"
+          cleanup: "false"
+      - name: "Produce `platform-builder` image"
+        uses: "docker/build-push-action@v6"
+        with:
+          build-args: |-
+            check_dependencies_updated=${{ env.check-dependencies-versions }}
+            cosmwasm_check_ver=${{ steps.cosmwasm-check-version.outputs.cosmwasm-check-version }}
+          cache-from: |-
+            type=gha,scope=platform-builder-${{ steps.container-cache-epoch.outputs.epoch }}
+          cache-to: |-
+            type=gha,scope=platform-builder-${{ steps.container-cache-epoch.outputs.epoch }},mode=max
+          context: "./"
+          file: "build.Containerfile"
+          load: "true"
+          tags: "platform-builder"
+          target: "platform-builder"
+      - name: "Produce `protocol-builder` image"
+        uses: "docker/build-push-action@v6"
+        with:
+          build-args: |-
+            check_dependencies_updated=${{ env.check-dependencies-versions }}
+            cosmwasm_check_ver=${{ steps.cosmwasm-check-version.outputs.cosmwasm-check-version }}
+          cache-from: |-
+            type=gha,scope=protocol-builder-${{ steps.container-cache-epoch.outputs.epoch }}
+          cache-to: |-
+            type=gha,scope=protocol-builder-${{ steps.container-cache-epoch.outputs.epoch }},mode=max
+          context: "./"
+          file: "build.Containerfile"
+          load: "true"
+          tags: "protocol-builder"
+          target: "protocol-builder"
+      - name: "Export `platform-builder` image"
         run: |-
+          set -eu
+
           "docker" \
-            "buildx" \
-            "build" \
-            --file "build.Containerfile" \
-            --tag "builder-base" \
-            --target "builder-base" \
-            "."
-      - if: |-
-          !steps.restore-builder-base-container-cache.outputs.cache-hit
-        name: "Export builder base image"
-        run: |-
-          "docker" \
+            "image" \
             "save" \
-            --output "builder-base-container.tar" \
-            "builder-base"
-      - if: |-
-          !steps.restore-builder-base-container-cache.outputs.cache-hit
-        name: "Store builder base image to cache"
-        uses: "actions/cache/save@v4"
-        with:
-          key: |-
-            ${{ steps.builder-base-container-cache-key.outputs.cache-key }}
-          path: |-
-            builder-base-container.tar
-      - if: |-
-          steps.restore-builder-base-container-cache.outputs.cache-hit
-        name: "Load builder base image"
-        run: |-
-          "docker" \
-            "load" \
-            --input "builder-base-container.tar"
-      - name: "Produce builder images"
-        env:
-          CHECK_DEPS_UPDATED: |-
-            ${{ env.check-dependencies-versions }}
-        run: |-
-          set -eu
-
-          builder_image() {
-            target="${1:?}"
-
-            "docker" \
-              "buildx" \
-              "build" \
-              --build-arg "check_dependencies_updated=${CHECK_DEPS_UPDATED:?}" \
-              --file "build.Containerfile" \
-              --tag "${target:?}-builder" \
-              --target "${target:?}-builder" \
-              "."
-          }
-
-          for workspace in \
-            "platform" \
-            "protocol"
-          do
-            "builder_image" "${workspace:?}"
-          done
-      - name: "Produce platform binaries"
-        run: |-
-          set -eu
-
-          build_and_pack() {
-            network="${1:?}"
-
-            "mkdir" "./artifacts-${network:?}/"
-
-            "docker" \
-              "run" \
-              --volume "./artifacts-${network:?}/:/artifacts/" \
-              "platform-builder" \
-              "${network:?}"
-          }
-
-          for network in \
-            "test-net" \
-            "production-net"
-          do
-            "build_and_pack" "${network:?}"
-          done
+            --output "platform-builder.tar" \
+            "platform-builder"
       - if: |-
           fromJSON(env.upload-artifacts)
-        name: "Export protocol builder image"
+        name: "Export `protocol-builder` image"
         run: |-
+          set -eu
+
           "docker" \
             "image" \
             "save" \
             --output "protocol-builder.tar" \
             "protocol-builder"
-      - if: |-
-          fromJSON(env.upload-artifacts)
-        name: "Upload test-net platform binaries"
+      - name: "Upload `platform-builder` image"
         uses: "actions/upload-artifact@v4"
         with:
           if-no-files-found: "error"
-          name: "platform-test-net"
+          name: "platform-builder"
           path: |-
-            ./artifacts-test-net/*
+            ./platform-builder.tar
       - if: |-
           fromJSON(env.upload-artifacts)
-        name: "Upload production-net platform binaries"
-        uses: "actions/upload-artifact@v4"
-        with:
-          if-no-files-found: "error"
-          name: "platform-production-net"
-          path: |-
-            ./artifacts-production-net/*
-      - if: |-
-          fromJSON(env.upload-artifacts)
-        name: "Upload protocol builder image"
+        name: "Upload `protocol-builder` image"
         uses: "actions/upload-artifact@v4"
         with:
           if-no-files-found: "error"
           name: "protocol-builder"
           path: |-
             ./protocol-builder.tar
+  build_binaries:
+    needs:
+      - "build_images"
+    runs-on: "ubuntu-24.04"
+    strategy:
+      fail-fast: true
+      matrix:
+        network-type:
+          - "test-net"
+          - "production-net"
+    env:
+      network_type: |-
+        ${{ matrix.network-type }}
+    name: |-
+      Build ${{ matrix.network-type }} platform binaries
+    steps:
+      - name: "Download `platform-builder` image artifact"
+        uses: "actions/download-artifact@v4"
+        with:
+          name: "platform-builder"
+      - run: |-
+          set -eu
+
+          "docker" \
+            "image" \
+            "load" \
+            --input "platform-builder.tar"
+      - run: |-
+          set -eu
+
+          "mkdir" "./artifacts/"
+
+          "docker" \
+            "run" \
+            --volume "./artifacts/:/artifacts/:rw" \
+            "platform-builder" \
+            "${network_type:?}"
+      - if: |-
+          fromJSON(env.upload-artifacts)
+        name: |-
+          Upload ${{ matrix.network-type }} `platform` binaries
+        uses: "actions/upload-artifact@v4"
+        with:
+          if-no-files-found: "error"
+          name: |-
+            platform-${{ matrix.network-type }}
+          path: |-
+            ./artifacts/*
   create_draft_release:
     needs:
-      - "build"
+      - "build_images"
+      - "build_binaries"
     if: |-
       github.ref_type == 'tag'
     name: "Create draft release"
     permissions:
       contents: "write"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     steps:
       - name: "Checkout repository"
         uses: "actions/checkout@v4"
