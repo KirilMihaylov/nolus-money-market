@@ -4,7 +4,6 @@
 **/target/
 **/*.md
 **/*Containerfile
-**/.*ignore
 **/LICENSE
 **/clippy.toml
 **/rustfmt.toml

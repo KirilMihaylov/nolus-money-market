@@ -144,7 +144,10 @@ RUN ["cargo", "install", "--jobs", "1", "--force", "cosmwasm-check"]
 FROM builder-base AS builder
 
 RUN --mount=type=bind,source="./",target="/code/",readonly \
-  "cd" "/code/" && \
+  cd "/code/" && \
+    "git" "config" --global "core.excludeFile" "/code/.dockerignore" && \
+    "git" "status" && \
+    "exit" "1" && \
     tag="$("git" "describe" --tags --abbrev="0")" && \
     readonly tag && \
     tag_commit="$("git" "show-ref" "${tag:?}" --hash --abbrev)" && \
