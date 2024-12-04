@@ -56,8 +56,6 @@ RUN ["mkdir", "-m", "0755", "/temp-artifacts/"]
 
 ENTRYPOINT ["sh", "-e", "/build/build.sh"]
 
-RUN ["rustup", "target", "add", "wasm32-unknown-unknown"]
-
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
   ["apt", "update"]
@@ -65,6 +63,8 @@ RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
   ["apt", "install", "--yes", "coreutils", "git", "jq", "sed", "tar", "wget"]
+
+RUN ["rustup", "target", "add", "wasm32-unknown-unknown"]
 
 ARG platform_contracts_count
 
@@ -134,10 +134,10 @@ ${binaryen_ver:?}/binaryen-${binaryen_ver:?}-x86_64-linux.tar.gz" && \
       cd "/binaryen/" && \
       "tar" -x -f "./binaryen.tar.gz" && \
       "mv" "./binaryen-${binaryen_ver:?}/bin/wasm-opt" "./" && \
-      "rm" -r -f "./binaryen-${binaryen_ver:?}/" && \
-      "chmod" "0555" "/binaryen/wasm-opt" && \
-      "chown" "0:0" "/binaryen/wasm-opt" && \
-      "cp" "/binaryen/wasm-opt" "/usr/bin/"; \
+      "rm" -f -R "./binaryen.tar.gz" "./binaryen-${binaryen_ver:?}/" && \
+      "chmod" "0555" "./wasm-opt" && \
+      "chown" "0:0" "./wasm-opt" && \
+      "cp" "./wasm-opt" "/usr/bin/wasm-opt"; \
   fi
 
 RUN ["cargo", "install", "--jobs", "1", "--force", "cosmwasm-check"]
