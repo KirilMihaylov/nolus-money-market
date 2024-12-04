@@ -157,9 +157,13 @@ RUN --mount=type=bind,source="./",target="/code/",readonly \
       "tag=%s / %s" \
       "${tag_commit:?}" \
       "${described:?}" \
-      >"/release-version.txt" && \
-    "cat" "/release-version.txt" && \
-    exit "1"
+      >"/release-version.txt"
+
+RUN ["cat", "/release-version.txt"]
+
+RUN "cat" "/release-version.txt" >&2
+
+RUN exit 1
 
 ARG check_dependencies_updated="true"
 
