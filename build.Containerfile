@@ -125,20 +125,22 @@ RUN "printf" \
     >"/binaryen-version.txt"
 
 RUN --mount=type=cache,id="${binaryen_ver:?}",target="/binaryen/",sharing="locked" \
-  if ! test -x "/binaryen/wasm-opt"; \
-  then \
-    "wget" \
-      "-O" "/binaryen/binaryen.tar.gz" \
-      "https://github.com/WebAssembly/binaryen/releases/download/\
+  cd "/binaryen/" && \
+    if ! test -x "./wasm-opt"; \
+    then \
+      "wget" \
+        "-O" "./binaryen.tar.gz" \
+        "https://github.com/WebAssembly/binaryen/releases/download/\
 ${binaryen_ver:?}/binaryen-${binaryen_ver:?}-x86_64-linux.tar.gz" && \
-      cd "/binaryen/" && \
-      "tar" -x -f "./binaryen.tar.gz" && \
-      "mv" "./binaryen-${binaryen_ver:?}/bin/wasm-opt" "./" && \
-      "rm" -f -R "./binaryen.tar.gz" "./binaryen-${binaryen_ver:?}/" && \
-      "chmod" "0555" "./wasm-opt" && \
-      "chown" "0:0" "./wasm-opt" && \
-      "cp" "./wasm-opt" "/usr/bin/wasm-opt"; \
-  fi
+        "tar" -f "./binaryen.tar.gz" -x && \
+        "mv" "./binaryen-${binaryen_ver:?}/bin/wasm-opt" "./" && \
+        "rm" -f -R "./binaryen.tar.gz" "./binaryen-${binaryen_ver:?}/" && \
+        "chmod" "0555" "./wasm-opt" && \
+        "chown" "0:0" "./wasm-opt"; \
+    fi && \
+    "cp" \
+      "./wasm-opt" \
+      "/usr/bin/wasm-opt"
 
 RUN ["cargo", "install", "--jobs", "1", "--force", "cosmwasm-check"]
 
