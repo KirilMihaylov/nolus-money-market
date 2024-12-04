@@ -149,50 +149,26 @@ ENV CHECK_DEPENDENCIES_UPDATED="${check_dependencies_updated:?}"
 
 LABEL check_container_dependencies="${check_dependencies_updated:?}"
 
-RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
-  case "${check_dependencies_updated:?}" in \
-    ("false") ;; \
-    ("true") \
-      "cd" "/tools/" && \
-        "cargo" "update" --locked && \
-        "cargo" "fetch" --locked \
-      ;; \
-    (*) \
-      "echo" "Build argument \"check_dependencies_updated\" must be a boolean value!" && \
-        exit 1 \
-      ;; \
-  esac
-
-RUN --mount=type=bind,source="./platform/",target="/platform/",readonly \
-  --mount=type=bind,source="./tools/",target="/tools/",readonly \
-  case "${check_dependencies_updated:?}" in \
-    ("false") ;; \
-    ("true") \
-      "cd" "/platform/" && \
-        "cargo" "update" --locked && \
-        "cargo" "fetch" --locked \
-      ;; \
-    (*) \
-      "echo" "Build argument \"check_dependencies_updated\" must be a boolean value!" && \
-        exit 1 \
-      ;; \
-  esac
-
 RUN --mount=type=bind,source="./platform/",target="/platform/",readonly \
   --mount=type=bind,source="./protocol/",target="/protocol/",readonly \
   --mount=type=bind,source="./tools/",target="/tools/",readonly \
-  case "${check_dependencies_updated:?}" in \
-    ("false") ;; \
-    ("true") \
-      "cd" "/protocol/" && \
-        "cargo" "update" --locked && \
-        "cargo" "fetch" --locked \
-      ;; \
-    (*) \
-      "echo" "Build argument \"check_dependencies_updated\" must be a boolean value!" && \
-        exit 1 \
-      ;; \
-  esac
+  check_and_fetch() ( \
+    cd "${1:?}" && \
+      case "${check_dependencies_updated:?}" in \
+      ("false") ;; \
+      ("true") \
+        "cargo" "update" --locked \
+        ;; \
+      (*) \
+        "echo" "Build argument \"check_dependencies_updated\" must be a boolean value!" && \
+          exit "1" \
+        ;; \
+      esac && \
+      "cargo" "fetch" --locked \
+  ) && \
+    "check_and_fetch" "/platform/" && \
+    "check_and_fetch" "/protocol/" && \
+    "check_and_fetch" "/tools/"
 
 RUN --mount=type=bind,source="./",target="/code/",readonly \
   cd "/code/" && \
@@ -216,10 +192,10 @@ RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
   --mount=type=tmpfs,target="${cargo_target_dir:?}" \
   [ \
     "cargo", \
-    "install", \
-    "--jobs", "1", \
-    "--locked", \
-    "--path", "/tools/cargo-each/" \
+      "install", \
+      "--jobs", "1", \
+      "--offline", \
+      "--path", "/tools/cargo-each/" \
   ]
 
 COPY --chmod="0555" "./scripts/build-and-optimize.sh" "/build/build.sh"
