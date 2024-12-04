@@ -143,29 +143,6 @@ RUN ["cargo", "install", "--jobs", "1", "--force", "cosmwasm-check"]
 
 FROM builder-base AS builder
 
-RUN --mount=type=bind,source="./",target="/code/",readonly \
-  cd "/code/" && \
-    "git" "config" --global "core.excludeFile" "/code/.dockerignore" && \
-    tag="$("git" "describe" --tags --abbrev="0")" && \
-    readonly tag && \
-    tag_commit="$("git" "show-ref" "${tag:?}" --hash --abbrev)" && \
-    readonly tag_commit && \
-    described="$("git" "describe" --tags --dirty)" && \
-    readonly described && \
-    "git" "status" && \
-    "git" "config" --global --unset "core.excludeFile" && \
-    "printf" \
-      "tag=%s / %s" \
-      "${tag_commit:?}" \
-      "${described:?}" \
-      >"/release-version.txt"
-
-RUN ["cat", "/release-version.txt"]
-
-RUN "cat" "/release-version.txt" >&2
-
-RUN exit 1
-
 ARG check_dependencies_updated="true"
 
 ENV CHECK_DEPENDENCIES_UPDATED="${check_dependencies_updated:?}"
@@ -217,11 +194,26 @@ RUN --mount=type=bind,source="./platform/",target="/platform/",readonly \
       ;; \
   esac
 
-COPY --chmod="0555" "./tools/" "/tools/"
+RUN --mount=type=bind,source="./",target="/code/",readonly \
+  cd "/code/" && \
+    "git" "config" --global "core.excludeFile" "/code/.dockerignore" && \
+    tag="$("git" "describe" --tags --abbrev="0")" && \
+    readonly tag && \
+    tag_commit="$("git" "show-ref" "${tag:?}" --hash --abbrev)" && \
+    readonly tag_commit && \
+    described="$("git" "describe" --tags --dirty)" && \
+    readonly described && \
+    "git" "config" --global --unset "core.excludeFile" && \
+    "printf" \
+      "tag=%s / %s" \
+      "${tag_commit:?}" \
+      "${described:?}" \
+      >"/release-version.txt"
 
 ARG cargo_target_dir
 
-RUN --mount=type=tmpfs,target="${cargo_target_dir:?}" \
+RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
+  --mount=type=tmpfs,target="${cargo_target_dir:?}" \
   [ \
     "cargo", \
     "install", \
