@@ -57,6 +57,14 @@ ENTRYPOINT ["sh", "-e", "/build/build.sh"]
 
 RUN ["rustup", "target", "add", "wasm32-unknown-unknown"]
 
+RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
+  --mount=type=cache,target="/var/lib/apt",sharing="locked" \
+  ["apt", "update"]
+
+RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
+  --mount=type=cache,target="/var/lib/apt",sharing="locked" \
+  ["apt", "install", "--yes", "coreutils", "git", "jq", "sed", "tar", "wget"]
+
 ARG platform_contracts_count
 
 ARG protocol_contracts_count
@@ -105,14 +113,6 @@ RUN "printf" \
     "%s" \
     "${cosmwasm_capabilities:?}" \
     >"/configuration/cosmwasm_capabilities"
-
-RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
-  --mount=type=cache,target="/var/lib/apt",sharing="locked" \
-  ["apt", "update"]
-
-RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
-  --mount=type=cache,target="/var/lib/apt",sharing="locked" \
-  ["apt", "install", "--yes", "coreutils", "git", "jq", "sed", "tar", "wget"]
 
 ARG binaryen_ver="version_117"
 
