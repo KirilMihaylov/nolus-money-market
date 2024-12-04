@@ -114,7 +114,7 @@ RUN "printf" \
     "${cosmwasm_capabilities:?}" \
     >"/configuration/cosmwasm_capabilities"
 
-ARG binaryen_ver="version_117"
+ARG binaryen_ver="version_119"
 
 LABEL binaryen_ver="${binaryen_ver:?}"
 
