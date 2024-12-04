@@ -146,19 +146,20 @@ FROM builder-base AS builder
 RUN --mount=type=bind,source="./",target="/code/",readonly \
   cd "/code/" && \
     "git" "config" --global "core.excludeFile" "/code/.dockerignore" && \
-    "git" "status" && \
-    "exit" "1" && \
     tag="$("git" "describe" --tags --abbrev="0")" && \
     readonly tag && \
     tag_commit="$("git" "show-ref" "${tag:?}" --hash --abbrev)" && \
     readonly tag_commit && \
     described="$("git" "describe" --tags --dirty)" && \
     readonly described && \
+    "git" "config" --global --unset "core.excludeFile" && \
     "printf" \
       "tag=%s / %s" \
       "${tag_commit:?}" \
       "${described:?}" \
-      >"/release-version.txt"
+      >"/release-version.txt" && \
+    "cat" "/release-version.txt" && \
+    exit "1"
 
 ARG check_dependencies_updated="true"
 
