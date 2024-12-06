@@ -20,25 +20,262 @@
 
 set -eu
 
+readonly CHECK_DEPENDENCIES_UPDATED
+
+RUSTFLAGS="${RUSTFLAGS:+"${RUSTFLAGS:?} "}-C link-arg=-s"
+readonly RUSTFLAGS
+export RUSTFLAGS
+
+error_report_dir="/artifacts/"
+
 error() {
   set -eu
 
   case "${#:?}" in
     ("1")
       "tee" \
-        "/artifacts/error-report.txt" \
+        "/${error_report_dir:?}/error-report.txt" \
         >&2 \
         <<EOF
 ${1:?}
 EOF
       ;;
-    (*) "error" "\"error\" function requires exactly one argument!"
+    (*)
+      "error" "\"error\" function requires exactly one argument! Number of \
+passed arguments: ${#:?}."
+      ;;
   esac
 
-  exit 1
+  exit "1"
 }
 
-readonly CHECK_DEPENDENCIES_UPDATED
+is_privileged() (
+  user_id="$("id" --user)"
+  readonly user_id
+  real_user_id="$("id" --real --user)"
+  readonly real_user_id
+  
+  for id in \
+    "${user_id:?}" \
+    "${real_user_id:?}"
+  do
+    case "${id:?}" in
+      ("0")
+        exit "0"
+        ;;
+    esac
+  done
+
+  exit "1"
+)
+
+list_contents() (
+  cd "${1:?}"
+
+  shift
+
+  case "${#:?}" in
+    ("0") ;;
+    (*)
+      "error" "\"list_contents\" expects exactly one argument, the directory to \
+list!"
+      ;;
+  esac
+
+  "find" \
+    "." \
+    -path "./?*" \
+    -a \
+    "(" \
+    "!" -path "./?*/?**" \
+    ")"
+)
+
+clean_dir() (
+  files="$("list_contents" "${1:?}")"
+  readonly files
+
+  case "${files?}" in
+    ("") ;;
+    (*)
+      while read -r file
+      do
+        if ! "rm" -f -R "${1:?}/${file:?}"
+        then
+          "error" "Failed to clean directory \"${1:?}\"! Failed to remove \
+\"${file:?}\"!"
+        fi
+      done <<EOF
+${files:?}
+EOF
+    ;;
+  esac
+)
+
+run_unprivileged() {
+  RUN_UNPRIVILEGED="1" \
+    "setpriv" \
+    --reuid="1000" \
+    --regid="1000" \
+    --clear-groups \
+    --inh-caps="-all" \
+    --no-new-privs \
+    "${0:?}" \
+    "${@:?}"
+}
+
+move_dir_contents() (
+  files="$("list_contents" "${1:?}")"
+  readonly files
+
+  "echo" "Files in ${1:?}: ${files?}"
+
+  case "${files?}" in
+    ("") ;;
+    (*)
+      while read -r file
+      do
+        if ! "mv" "${1:?}/${file:?}" "${2:?}/"
+        then
+          "error" "Failed to clean directory \"${1:?}\"! Failed to remove \
+\"${file:?}\"!"
+        fi
+      done <<EOF
+${files:?}
+EOF
+    ;;
+  esac
+)
+
+copy_dir_contents() (
+  files="$("list_contents" "${1:?}")"
+  readonly files
+
+  case "${files?}" in
+    ("") ;;
+    (*)
+      while read -r file
+      do
+        if ! "cp" -R "${1:?}/${file:?}" "${2:?}/"
+        then
+          "error" "Failed to clean directory \"${1:?}\"! Failed to remove \
+\"${file:?}\"!"
+        fi
+      done <<EOF
+${files:?}
+EOF
+    ;;
+  esac
+)
+
+rerun_as_unprivileged() {
+  if "is_privileged"
+  then
+    readonly error_report_dir
+
+    build_configuration="/build-configuration/"
+    readonly build_configuration
+
+    protocol_json="${build_configuration:?}/protocol.json"
+    readonly protocol_json
+
+    topology_json="${build_configuration:?}/topology.json"
+    readonly topology_json
+
+    "clean_dir" "/artifacts/"
+
+    for directory in \
+      "target" \
+      "temp-artifacts"
+    do
+      if ! "mkdir" \
+        -m "0755" \
+        "/${directory:?}"
+      then
+        "error" "Failed to create \"/${directory:?}\" directory!"
+      fi
+
+      "chown" \
+        "1000:1000" \
+        "/${directory:?}"
+    done
+
+    if test -r "${protocol_json:?}" -o -r "${topology_json:?}"
+    then
+      protocol="$("cat" "${protocol_json:?}")"
+      readonly protocol
+      : "${protocol:?}"
+
+      topology="$("cat" "${topology_json:?}")"
+      readonly topology
+      : "${topology:?}"
+
+      "run_unprivileged" \
+        "${protocol:?}" \
+        "${topology:?}" \
+        "${@:?}"
+    else
+      "run_unprivileged" "${@:?}"
+    fi
+
+    "rm" \
+      -R \
+      "/target"
+
+    "chown" \
+      -R \
+      "0:0" \
+      "/temp-artifacts"
+
+    "chmod" \
+      -R \
+      "0644" \
+      "/temp-artifacts"
+
+    "move_dir_contents" \
+      "/temp-artifacts/" \
+      "/artifacts/"
+
+    "find" \
+      "/temp-artifacts"
+
+    "rmdir" \
+      "/temp-artifacts"
+
+    "copy_dir_contents" \
+      "/labels/" \
+      "/artifacts/"
+
+    exit
+  else
+    : "${RUN_UNPRIVILEGED:?}"
+    unset RUN_UNPRIVILEGED
+
+    error_report_dir="/temp-artifacts/"
+    readonly error_report_dir
+  fi
+}
+
+"rerun_as_unprivileged" "${@:?}"
+
+check_groups() {
+  group_ids="$("id" --groups)"
+  readonly group_ids
+  real_group_ids="$("id" --real --groups)"
+  readonly real_group_ids
+
+  for ids in "${group_ids:?}" "${real_group_ids:?}"
+  do
+    case "${ids:?}" in
+      ("0"|"0"[![:digit:]]*|*[![:digit:]]"0"[![:digit:]]*|*[![:digit:]]"0")
+      #("0"|"0"[[:digit:]]*|*[[:digit:]]"0"[[:digit:]]*|*[[:digit:]]"0")
+        "error" "TODO"
+        ;;
+    esac
+  done
+}
+
+"check_groups"
 
 case "${CHECK_DEPENDENCIES_UPDATED:?}" in
   ("false") ;;
@@ -47,21 +284,16 @@ case "${CHECK_DEPENDENCIES_UPDATED:?}" in
       "update" \
       --locked
     then
-      "error" "Updating dependencies failed!"
+      "error" "Dependencies are out of date!"
     fi
+    ;;
 esac
 
-RUSTFLAGS="${RUSTFLAGS:+"${RUSTFLAGS:?} "}-C link-arg=-s"
-readonly RUSTFLAGS
-export RUSTFLAGS
-
-if RELEASE_VERSION="$("cat" "/release-version.txt")"
+if RELEASE_VERSION="$("cat" "/labels/release-version.txt")"
 then
   readonly RELEASE_VERSION
-
-  : "${RELEASE_VERSION:?"Release version cannot be null!"}"
-
   export RELEASE_VERSION
+  : "${RELEASE_VERSION:?"Release version cannot be null!"}"
 else
   "error" "Failed to read release version!"
 fi
@@ -75,15 +307,14 @@ fi
 
 build_profile="${1:?"Passing build profile as first parameter is required!"}"
 readonly build_profile
-
 shift
 
-case "${#:?}" in
-  ("0") ;;
-  (*) "error" "Expected only one argument denominating build profile!"
-esac
+build_profiles_directory="/configuration/build-profiles/"
+readonly build_profiles_directory
 
-if mapped_build_profile="$("cat" "/build-profiles/${build_profile:?}")"
+if mapped_build_profile="$(
+  "cat" "${build_profiles_directory:?}/${build_profile:?}"
+)"
 then
   readonly mapped_build_profile
 
@@ -92,26 +323,23 @@ else
   if build_profiles="$(
     "ls" \
       -1 \
-      "/build-profiles/"
+      "${build_profiles_directory:?}"
   )"
   then
-    if build_profiles="$(
-      "sed" \
-        -e "s/^/* /"\
-        <<EOF
-${build_profiles:?}
-EOF
-    )"
-    then
-      readonly build_profiles
+    build_profiles_pretty=""
 
-      "error" "Failed to read build profile mapping!
+    while read -r build_profiles_entry
+    do
+      build_profiles_pretty="${build_profiles_pretty:+"${build_profiles_pretty:?}
+"}* ${build_profiles_entry?}"
+    done <<EOF
+${build_profiles}
+EOF
+
+    "error" "Failed to read build profile mapping!
 
 Existing profiles:
-${build_profiles:?}"
-    else
-      "error" "Failed to invoke \"sed\"!"
-    fi
+${build_profiles_pretty?}"
   else
     "error" "Failed to read available build profiles!"
   fi
@@ -122,7 +350,6 @@ if max_binary_size="$(
 )"
 then
   readonly max_binary_size
-
   : "${max_binary_size:?"Maximum binary size cannot be null!"}"
 else
   "error" "Failed to read max binary size for build profile!"
@@ -130,56 +357,46 @@ fi
 
 if ! working_directory="$("pwd")"
 then
-  "error" "Failed to retrieve current directory via \"pwd\"!"
+  "echo" \
+    "Failed to retrieve current directory's path!" \
+    >&2
 fi
-if ! working_directory="${working_directory%%"/"}"
+if working_directory="$("basename" "${working_directory:?}")"
 then
-  "error" "Failed to strip prefix from current directory!"
+  readonly working_directory
+  : "${working_directory:?}"
+else
+  "echo" \
+    "Failed to retrieve name of current directory!" \
+    >&2
 fi
-if ! working_directory="${working_directory##"/"}"
-then
-  "error" "Failed to strip prefix from current directory!"
-fi
-readonly working_directory
 
 case "${working_directory:?}" in
   ("platform")
+    case "${#:?}" in
+      ("0") ;;
+      (*)
+        "error" "Expected exactly one argument denominating the build profile!"
+        ;;
+    esac
+
     dex_type=""
+    readonly dex_type
     ;;
   ("protocol")
-    protocol_json="/build-configuration/protocol.json"
-    readonly protocol_json
-
-    topology_json="/build-configuration/topology.json"
-    readonly topology_json
-
-    for file in \
-      "${protocol_json:?}" \
-      "${topology_json:?}"
-    do
-      if ! test \
-        "(" \
-        -f "${file:?}" \
-        ")" \
-        -a \
-        "(" \
-        -r "${file:?}" \
-        ")"
-      then
-        "error" "\"${file:?}\" doesn't exist or is not readable!"
-      fi
-    done
-
     if protocol="$(
       "jq" \
         -c \
         "." \
-        <"${protocol_json:?}"
+        <"${1:?}"
     )"
     then
       readonly protocol
+      : "${protocol:?"Protocol JSON cannot be empty!"}"
+
+      shift
     else
-      "error" "Failed to read protocol describing JSON file!"
+      "error" "Failed to parse protocol describing JSON!"
     fi
 
     if dex_type="$(
@@ -189,17 +406,20 @@ case "${working_directory:?}" in
         --argjson "protocol" "${protocol:?}" \
         ".networks[\$protocol.dex_network].dexes[\$protocol.dex].type | \
 select(. != null)" \
-        <"${topology_json:?}"
+        <"${1:?}"
     )"
     then
       readonly dex_type
-
       : "${dex_type:?"DEX type cannot be null!"}"
+
+      shift
     else
       "error" "Failed to get DEX type from topology describing JSON file!"
     fi
     ;;
-  (*) "error" "Current directory corresponds to an unknown workspace!"
+  (*)
+    "error" "Current directory corresponds to an unknown workspace!"
+    ;;
 esac
 readonly dex_type
 : "${dex_type?}"
@@ -214,17 +434,23 @@ readonly contracts_count
 : "${contracts_count:?"Contracts count cannot be null!"}"
 
 for directory in \
-  "target" \
   "artifacts" \
+  "target" \
   "temp-artifacts"
 do
-  if ! "rm" \
-    -f \
-    -R \
-    "/${directory:?}/"*
-  then
-    "error" "Failed to clear the \"${directory:?}\" directory!"
-  fi
+  files="$(
+    cd "/${directory:?}" && \
+      "find" \
+        "." \
+        -path "?*/?**"
+  )"
+
+  case "${files?}" in
+    ("") ;;
+    (*)
+      "error" "The \"${directory:?}\" directory is not empty!"
+      ;;
+  esac
 done
 
 CURRENCIES_BUILD_REPORT="/temp-artifacts/currencies.build.log"
@@ -249,16 +475,17 @@ do
         "build" \
         --profile "${mapped_build_profile:?}" \
         --lib \
-        --locked \
+        --frozen \
         --target "wasm32-unknown-unknown" \
-        --target-dir "/target/"
+        --target-dir "${CARGO_TARGET_DIR:?}"
       then
         "error" "Failed to build contracts in workspace tagged with \"${tag}\"!"
       fi
   esac
 done
 
-output_directory="/target/wasm32-unknown-unknown/${mapped_build_profile:?}/"
+output_directory="${CARGO_TARGET_DIR:?}/wasm32-unknown-unknown/\
+${mapped_build_profile:?}/"
 readonly output_directory
 
 if files="$(
@@ -267,7 +494,11 @@ if files="$(
       "." \
       "(" \
       "!" \
-      -path "./*/*" \
+      "(" \
+      -path "./?*/*" \
+      -o \
+      -path "./?*/*" \
+      ")" \
       ")" \
       -type "f" \
       -name "*.wasm" \
@@ -375,7 +606,9 @@ case "${dex_type?}" in
   ("")
     build_output_packages=""
     ;;
-  (*) build_output_packages="currencies"
+  (*)
+    build_output_packages="currencies"
+    ;;
 esac
 readonly build_output_packages
 
@@ -422,6 +655,7 @@ EOF
       <<EOF
 ${build_output_packages?}
 EOF
+    ;;
 esac
 
 if ! checksum="$(
@@ -436,7 +670,7 @@ fi
 readonly checksum
 
 if ! "tee" \
-  "/artifacts/checksums.txt" \
+  "/temp-artifacts/checksums.txt" \
   <<EOF
 
 Checksums:
@@ -445,30 +679,3 @@ EOF
 then
   "error" "Failed to write checksums to artifacts directory!"
 fi
-
-"cp" \
-  "/binaryen-version.txt" \
-  "/release-version.txt" \
-  "/rust-version.txt" \
-  "/artifacts/"
-
-temp_artifacts="$(
-  "find" \
-    "/temp-artifacts/" \
-    "!" \
-    "(" \
-    -path "/temp-artifacts/" \
-    -o \
-    -path "/temp-artifacts/*/*" \
-    ")"
-)"
-
-while read -r temp_artifact
-do
-  "mv" \
-    "${temp_artifact:?}" \
-    "/artifacts/"
-done \
-  <<EOF
-${temp_artifacts?}
-EOF

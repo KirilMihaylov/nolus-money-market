@@ -402,9 +402,35 @@ jobs:
           !steps.restore-builder-base-container-cache.outputs.cache-hit
         name: "Build builder base image"
         run: |-
+          set -eu
+
+          cosmwasm_check_version="$("cargo" "info" "cosmwasm-check")"
+          cosmwasm_check_version="$(
+            "grep" \
+              "^version: " \
+              <<EOF
+          ${cosmwasm_check_version:?}
+          EOF
+          )"
+          cosmwasm_check_version="$(
+            "tail" \
+              -n "1" \
+              <<EOF
+          ${cosmwasm_check_version:?}
+          EOF
+          )"
+          cosmwasm_check_version="$(
+            "sed" \
+              -e "s/^version: //g" \
+              <<EOF
+          ${cosmwasm_check_version:?}
+          EOF
+          )"
+
           "docker" \
             "buildx" \
             "build" \
+            --build-arg "cosmwasm_check_ver=${cosmwasm_check_version:?}" \
             --file "build.Containerfile" \
             --tag "builder-base" \
             --target "builder-base" \

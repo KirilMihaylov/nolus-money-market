@@ -2,20 +2,28 @@
 ##                         START : EDIT  HERE : START                         ##
 ################################################################################
 
-ARG rust_ver="1.83-slim"
+### Rust version
+ARG rust_ver="1.83"
 
+### Debian version
+ARG debian_ver="bookworm"
+
+### WebAssembly/Binaryen tag to use
+ARG binaryen_ver="version_119"
+
+### Workspace settings
 ARG platform_contracts_count="3"
-
 ARG protocol_contracts_count="7"
 
+### Test-net build settings
 ARG test_network_build_profile="test_nets_release"
-
 ARG test_network_max_binary_size="5M"
 
+### Production-net build settings
 ARG production_network_build_profile="production_nets_release"
-
 ARG production_network_max_binary_size="5M"
 
+### Artifacts check settings
 ARG cosmwasm_capabilities="cosmwasm_1_1,cosmwasm_1_2,iterator,neutron,staking,\
 stargate"
 
@@ -23,38 +31,11 @@ stargate"
 ##                           END : EDIT  HERE : END                           ##
 ################################################################################
 
-ARG cargo_target_dir="/target/"
+ARG check_dependencies_updated="true"
 
-FROM docker.io/library/rust:${rust_ver:?} AS builder-base
+FROM docker.io/debian:${debian_ver}-slim AS debian
 
-ARG rust_ver
-
-LABEL rust_ver="${rust_ver:?}"
-
-VOLUME ["/artifacts/"]
-
-ARG cargo_target_dir
-
-ENV CARGO_TARGET_DIR="${cargo_target_dir:?}"
-
-WORKDIR "/"
-
-RUN rustc_bin="$("rustup" "which" "rustc")" && \
-    "${rustc_bin:?}" \
-      --version \
-    >"/rust-version.txt"
-
-RUN ["mkdir", "-m", "0555", "/build/"]
-
-RUN ["mkdir", "-m", "0555", "/build-profiles/"]
-
-RUN ["mkdir", "-m", "0555", "/configuration/"]
-
-RUN ["mkdir", "-m", "0755", "/target/"]
-
-RUN ["mkdir", "-m", "0755", "/temp-artifacts/"]
-
-ENTRYPOINT ["sh", "-e", "/build/build.sh"]
+FROM debian AS debian-updated
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
@@ -62,9 +43,13 @@ RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
-  ["apt", "install", "--yes", "coreutils", "git", "jq", "sed", "tar", "wget"]
+  ["apt", "upgrade"]
 
-RUN ["rustup", "target", "add", "wasm32-unknown-unknown"]
+FROM debian-updated AS configuration
+
+RUN ["mkdir", "-m", "0555", "/configuration"]
+
+RUN ["mkdir", "-m", "0555", "/configuration/build-profiles"]
 
 ARG platform_contracts_count
 
@@ -85,7 +70,7 @@ ARG test_network_build_profile
 RUN "printf" \
     "%s" \
     "${test_network_build_profile:?}" \
-    >"/build-profiles/test-net"
+    >"/configuration/build-profiles/test-net"
 
 ARG test_network_max_binary_size
 
@@ -99,7 +84,7 @@ ARG production_network_build_profile
 RUN "printf" \
     "%s" \
     "${production_network_build_profile:?}" \
-    >"/build-profiles/production-net"
+    >"/configuration/build-profiles/production-net"
 
 ARG production_network_max_binary_size
 
@@ -115,108 +100,246 @@ RUN "printf" \
     "${cosmwasm_capabilities:?}" \
     >"/configuration/cosmwasm_capabilities"
 
-ARG binaryen_ver="version_119"
+FROM debian-updated AS wasm-opt
 
-LABEL binaryen_ver="${binaryen_ver:?}"
+RUN ["mkdir", "-m", "0555", "/labels/"]
+
+RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
+  --mount=type=cache,target="/var/lib/apt",sharing="locked" \
+  ["apt", "install", "--yes", "coreutils", "tar", "wget"]
+
+WORKDIR "/binaryen/"
+
+ARG binaryen_ver
+
+RUN "wget" \
+    "-O" "./binaryen.tar.gz" \
+    "https://github.com/WebAssembly/binaryen/releases/download/\
+${binaryen_ver:?}/binaryen-${binaryen_ver:?}-x86_64-linux.tar.gz"
+
+RUN ["tar", "-x", "-f", "./binaryen.tar.gz"]
 
 RUN "printf" \
     "%s" \
-    "${binaryen_ver}" \
-    >"/binaryen-version.txt"
+    "${binaryen_ver:?}" \
+    >"/labels/binaryen-version.txt"
 
-RUN --mount=type=cache,id="${binaryen_ver:?}",target="/binaryen/",sharing="locked" \
-  cd "/binaryen/" && \
-    if ! test -x "./wasm-opt"; \
-    then \
-      "wget" \
-        "-O" "./binaryen.tar.gz" \
-        "https://github.com/WebAssembly/binaryen/releases/download/\
-${binaryen_ver:?}/binaryen-${binaryen_ver:?}-x86_64-linux.tar.gz" && \
-        "tar" -f "./binaryen.tar.gz" -x && \
-        "mv" "./binaryen-${binaryen_ver:?}/bin/wasm-opt" "./" && \
-        "rm" -f -R "./binaryen.tar.gz" "./binaryen-${binaryen_ver:?}/" && \
-        "chmod" "0555" "./wasm-opt" && \
-        "chown" "0:0" "./wasm-opt"; \
-    fi && \
-    "cp" \
-      "./wasm-opt" \
-      "/usr/bin/wasm-opt"
+RUN "mv" \
+    "./binaryen-${binaryen_ver:?}/bin/wasm-opt" \
+    "./"
 
-RUN ["cargo", "install", "--jobs", "1", "--force", "cosmwasm-check"]
+FROM debian-updated AS release-version-label
 
-FROM builder-base AS builder
+RUN ["mkdir", "-m", "0555", "/labels/"]
 
-ARG check_dependencies_updated="true"
+RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
+  --mount=type=cache,target="/var/lib/apt",sharing="locked" \
+  ["apt", "install", "--yes", "coreutils", "git"]
+
+RUN --mount=type=bind,source="./",target="/code/",readonly \
+  cd "/code/" && \
+    tag="$("git" "describe" --tags)" && \
+    readonly tag && \
+    latest_tag="$("git" "describe" --tags --abbrev="0")" && \
+    readonly latest_tag && \
+    tag_commit="$(\
+      "git" \
+        "show-ref" \
+        "${latest_tag:?}" \
+        --abbrev \
+        --hash \
+        --tags\
+    )" && \
+    readonly tag_commit && \
+    "printf" \
+      "tag=%s / %s" \
+      "${tag_commit:?}" \
+      "${tag:?}" \
+      >"/labels/release-version.txt"
+
+FROM docker.io/rust:${rust_ver:?}-slim AS rust
+
+RUN ["mkdir", "-m", "0555", "/labels/"]
+
+RUN "chmod" "-R" "0555" "${CARGO_HOME:?}"
+
+RUN "chown" "-R" "0:0" "${CARGO_HOME:?}"
+
+RUN "chmod" "-R" "0555" "${RUSTUP_HOME:?}"
+
+RUN "chown" "-R" "0:0" "${RUSTUP_HOME:?}"
+
+ARG rust_ver
+
+LABEL rust_ver="${rust_ver:?}"
+
+RUN rustc_bin="$("rustup" "which" "rustc")" && \
+    "${rustc_bin:?}" \
+      --version \
+      >"/labels/rust-version.txt"
+
+RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
+  --mount=type=cache,target="/var/lib/apt",sharing="locked" \
+  ["apt", "update"]
+
+RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
+  --mount=type=cache,target="/var/lib/apt",sharing="locked" \
+  ["apt", "upgrade"]
+
+FROM rust AS cosmwasm-check
+
+ARG cosmwasm_check_ver
+
+RUN "cargo" \
+    "install" \
+    "--force" \
+    "--jobs" "1" \
+    "cosmwasm-check@${cosmwasm_check_ver:?}"
+
+FROM rust AS cargo-each
+
+RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
+  --mount=type=tmpfs,target="/target/" \
+  [ \
+    "cargo", \
+      "install", \
+      "--force", \
+      "--jobs", "1", \
+      "--locked", \
+      "--path", "/tools/cargo-each/", \
+      "--target-dir", "/target/" \
+  ]
+
+FROM rust AS rust-with-wasm32-target
+
+RUN ["rustup", "target", "add", "wasm32-unknown-unknown"]
+
+FROM rust-with-wasm32-target AS builder-base
+
+ENV CARGO_TARGET_DIR="/target/"
+
+VOLUME ["/artifacts/"]
+
+RUN ["chmod", "0555", "/artifacts"]
+
+RUN ["chown", "0:0", "/artifacts"]
+
+WORKDIR "/"
+
+RUN ["mkdir", "-m", "0555", "/build"]
+
+ENTRYPOINT ["/bin/sh", "-eu", "/build/build.sh"]
+
+RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
+  --mount=type=cache,target="/var/lib/apt",sharing="locked" \
+  ["apt", "install", "--yes", "coreutils", "jq", "util-linux"]
+
+ARG check_dependencies_updated
 
 ENV CHECK_DEPENDENCIES_UPDATED="${check_dependencies_updated:?}"
 
-LABEL check_container_dependencies="${check_dependencies_updated:?}"
+LABEL check_dependencies_updated="${check_dependencies_updated:?}"
 
-RUN --mount=type=bind,source="./platform/",target="/platform/",readonly \
-  --mount=type=bind,source="./protocol/",target="/protocol/",readonly \
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  --from=configuration \
+  "/configuration" \
+  "/configuration"
+
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  --from=wasm-opt \
+  "/binaryen/wasm-opt" \
+  "/usr/bin/"
+
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  --from=wasm-opt \
+  "/labels" \
+  "/labels"
+
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  --from=cosmwasm-check \
+  "/usr/local/cargo/bin/cosmwasm-check" \
+  "/usr/local/cargo/bin/"
+
+FROM builder-base AS builder
+
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  --from=release-version-label \
+  "/labels" \
+  "/labels"
+
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  --from=cargo-each \
+  "/usr/local/cargo/bin/cargo-each" \
+  "/usr/local/cargo/bin/"
+
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  "./platform" \
+  "/platform"
+
+ARG check_dependencies_updated
+
+RUN --mount=type=bind,source="./protocol/",target="/protocol/",readonly \
   --mount=type=bind,source="./tools/",target="/tools/",readonly \
   check_and_fetch() ( \
     cd "${1:?}" && \
       case "${check_dependencies_updated:?}" in \
-      ("false") ;; \
-      ("true") \
-        "cargo" "update" --locked \
-        ;; \
-      (*) \
-        "echo" "Build argument \"check_dependencies_updated\" must be a boolean value!" && \
-          exit "1" \
-        ;; \
+        ("false") ;; \
+        ("true") \
+          "cargo" "update" --locked \
+          ;; \
+        (*) \
+          "echo" "Build argument \"check_dependencies_updated\" must be a \
+boolean value!" && \
+            exit "1" \
+          ;; \
       esac && \
       "cargo" "fetch" --locked \
   ) && \
     "check_and_fetch" "/platform/" && \
-    "check_and_fetch" "/protocol/" && \
-    "check_and_fetch" "/tools/"
+    "check_and_fetch" "/protocol/"
 
-RUN --mount=type=bind,source="./",target="/code/",readonly \
-  cd "/code/" && \
-    "git" "config" --global "core.excludeFile" "/code/.dockerignore" && \
-    tag="$("git" "describe" --tags --abbrev="0")" && \
-    readonly tag && \
-    tag_commit="$("git" "show-ref" "${tag:?}" --hash --abbrev)" && \
-    readonly tag_commit && \
-    described="$("git" "describe" --tags --dirty)" && \
-    readonly described && \
-    "git" "config" --global --unset "core.excludeFile" && \
-    "printf" \
-      "tag=%s / %s" \
-      "${tag_commit:?}" \
-      "${described:?}" \
-      >"/release-version.txt"
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  "./.cargo" \
+  "/.cargo"
 
-ARG cargo_target_dir
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  "./scripts/build-and-optimize.sh" \
+  "/build/build.sh"
 
-RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
-  --mount=type=tmpfs,target="${cargo_target_dir:?}" \
-  [ \
-    "cargo", \
-      "install", \
-      "--jobs", "1", \
-      "--offline", \
-      "--path", "/tools/cargo-each/" \
-  ]
-
-COPY --chmod="0555" "./scripts/build-and-optimize.sh" "/build/build.sh"
-
-COPY --chmod="0555" "./.cargo/" "/.cargo/"
-
-FROM builder AS platform-builder-base
-
-COPY --chmod="0555" "./platform/" "/platform/"
-
-FROM platform-builder-base AS platform-builder
+FROM builder AS platform-builder
 
 WORKDIR "/platform/"
 
-FROM platform-builder-base AS protocol-builder
+FROM builder AS protocol-builder
 
 VOLUME ["/build-configuration/"]
 
+RUN ["chmod", "01557", "/build-configuration"]
+
+RUN ["chown", "0:0", "/build-configuration"]
+
 WORKDIR "/protocol/"
 
-COPY --chmod="0555" "./protocol/" "/protocol/"
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  "./protocol" \
+  "/protocol"
