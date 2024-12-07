@@ -213,6 +213,7 @@ copy_dir_contents_entry() {
   shift 3
 
   "cp" \
+    -R \
     "${directory:?}/${file:?}" \
     "${target_directory:?}"
 }
@@ -302,6 +303,12 @@ rerun_as_unprivileged() {
       -R \
       "0644" \
       "/rootless-artifacts"
+
+    "find" \
+      "/rootless-artifacts" \
+      -type "d" \
+      -path "/?*/?*" \
+      -exec "chmod" "a+x" "{}" ";"
 
     "move_dir_contents" \
       "/rootless-artifacts/" \
