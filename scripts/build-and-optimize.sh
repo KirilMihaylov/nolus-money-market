@@ -1,4 +1,4 @@
-#!/bin/sh -eu
+#!/bin/sh -eux
 
 ################################################################################
 ## This script shall conform to the POSIX.1 standard, a.k.a. IEEE Std 1003.1. ##
@@ -18,7 +18,7 @@
 ## environments.                                                              ##
 ################################################################################
 
-set -eu
+set -eux
 
 readonly CHECK_DEPENDENCIES_UPDATED
 
@@ -52,7 +52,11 @@ passed arguments: ${#:?}."
 is_privileged() (
   user_id="$("id" --user)"
   readonly user_id
-  real_user_id="$("id" --real --user)"
+  real_user_id="$(
+    "id" \
+      --real \
+      --user
+  )"
   readonly real_user_id
   
   for id in \
@@ -70,29 +74,38 @@ is_privileged() (
 )
 
 list_contents() (
-  cd "${1:?}"
-
-  shift
-
   case "${#:?}" in
-    ("0") ;;
+    ("1")
+      directory="${1:?}"
+      readonly directory
+
+      shift
+      ;;
     (*)
-      "error" "\"list_contents\" expects exactly one argument, the directory to \
-list!"
+      "error" "\"list_contents\" expects exactly one argument, the directory \
+to list!"
       ;;
   esac
+
+  cd "${directory:?}"
 
   "find" \
     "." \
     -path "./?*" \
     -a \
     "(" \
-    "!" -path "./?*/?**" \
+    "!" \
+    -path "./?*/?**" \
     ")"
 )
 
-clean_dir() (
-  files="$("list_contents" "${1:?}")"
+exec_for_dir_entries() (
+  directory="${1:?}"
+  command="${2:?}"
+  error="${3:?}"
+  shift 3
+
+  files="$("list_contents" "${directory:?}")"
   readonly files
 
   case "${files?}" in
@@ -100,16 +113,52 @@ clean_dir() (
     (*)
       while read -r file
       do
-        if ! "rm" -f -R "${1:?}/${file:?}"
+        if ! (
+          "${command:?}" \
+            "${directory:?}" \
+            "${file:?}" \
+            "${@}"
+        )
         then
-          "error" "Failed to clean directory \"${1:?}\"! Failed to remove \
-\"${file:?}\"!"
+          "${error:?}" \
+            "${directory:?}" \
+            "${file:?}"
         fi
       done <<EOF
 ${files:?}
 EOF
-    ;;
+      ;;
   esac
+)
+
+clean_dir_entry() {
+  directory="${1:?}"
+  file="${2:?}"
+  shift 2
+
+  "rm" \
+    -f \
+    -R \
+    "${directory:?}/${file:?}"
+}
+
+clean_dir_entry_error() {
+  directory="${1:?}"
+  file="${2:?}"
+  shift 2
+
+  "error" "Failed to clean directory \"${directory:?}\"! Failed to remove \
+\"${file:?}\"!"
+}
+
+clean_dir() (
+  directory="${1:?}"
+  shift
+
+  "exec_for_dir_entries" \
+    "${directory:?}" \
+    "clean_dir_entry" \
+    "clean_dir_entry_error"
 )
 
 run_unprivileged() {
@@ -124,48 +173,70 @@ run_unprivileged() {
     "${@:?}"
 }
 
+move_dir_contents_entry() {
+  directory="${1:?}"
+  file="${2:?}"
+  target_directory="${3:?}"
+  shift 3
+
+  "mv" \
+    "${directory:?}/${file:?}" \
+    "${target_directory:?}"
+}
+
+move_dir_contents_entry_error() {
+  directory="${1:?}"
+  file="${2:?}"
+  target_directory="${3:?}"
+  shift 3
+
+  "error" "Failed to move \"${file:?}\" from \"${directory:?}\" to \
+\"${target_directory:?}\"!"
+}
+
 move_dir_contents() (
-  files="$("list_contents" "${1:?}")"
-  readonly files
+  directory="${1:?}"
+  target_directory="${2:?}"
+  shift 2
 
-  "echo" "Files in ${1:?}: ${files?}"
-
-  case "${files?}" in
-    ("") ;;
-    (*)
-      while read -r file
-      do
-        if ! "mv" "${1:?}/${file:?}" "${2:?}/"
-        then
-          "error" "Failed to clean directory \"${1:?}\"! Failed to remove \
-\"${file:?}\"!"
-        fi
-      done <<EOF
-${files:?}
-EOF
-    ;;
-  esac
+  "exec_for_dir_entries" \
+    "${directory:?}" \
+    "move_dir_contents_entry" \
+    "move_dir_contents_entry_error" \
+    "${target_directory:?}"
 )
 
-copy_dir_contents() (
-  files="$("list_contents" "${1:?}")"
-  readonly files
+copy_dir_contents_entry() {
+  directory="${1:?}"
+  file="${2:?}"
+  target_directory="${3:?}"
+  shift 3
 
-  case "${files?}" in
-    ("") ;;
-    (*)
-      while read -r file
-      do
-        if ! "cp" -R "${1:?}/${file:?}" "${2:?}/"
-        then
-          "error" "Failed to clean directory \"${1:?}\"! Failed to remove \
-\"${file:?}\"!"
-        fi
-      done <<EOF
-${files:?}
-EOF
-    ;;
-  esac
+  "cp" \
+    "${directory:?}/${file:?}" \
+    "${target_directory:?}"
+}
+
+copy_dir_contents_entry_error() {
+  directory="${1:?}"
+  file="${2:?}"
+  target_directory="${3:?}"
+  shift 3
+
+  "error" "Failed to copy \"${file:?}\" from \"${directory:?}\" to \
+\"${target_directory:?}\"!"
+}
+
+copy_dir_contents() (
+  directory="${1:?}"
+  target_directory="${2:?}"
+  shift 2
+
+  "exec_for_dir_entries" \
+    "${directory:?}" \
+    "copy_dir_contents_entry" \
+    "copy_dir_contents_entry_error" \
+    "${target_directory:?}"
 )
 
 rerun_as_unprivileged() {
@@ -186,7 +257,7 @@ rerun_as_unprivileged() {
 
     for directory in \
       "target" \
-      "temp-artifacts"
+      "rootless-artifacts"
     do
       if ! "mkdir" \
         -m "0755" \
@@ -211,9 +282,9 @@ rerun_as_unprivileged() {
       : "${topology:?}"
 
       "run_unprivileged" \
+        "${@:?}" \
         "${protocol:?}" \
-        "${topology:?}" \
-        "${@:?}"
+        "${topology:?}"
     else
       "run_unprivileged" "${@:?}"
     fi
@@ -225,22 +296,18 @@ rerun_as_unprivileged() {
     "chown" \
       -R \
       "0:0" \
-      "/temp-artifacts"
+      "/rootless-artifacts"
 
     "chmod" \
       -R \
       "0644" \
-      "/temp-artifacts"
+      "/rootless-artifacts"
 
     "move_dir_contents" \
-      "/temp-artifacts/" \
+      "/rootless-artifacts/" \
       "/artifacts/"
 
-    "find" \
-      "/temp-artifacts"
-
-    "rmdir" \
-      "/temp-artifacts"
+    "rmdir" "/rootless-artifacts"
 
     "copy_dir_contents" \
       "/labels/" \
@@ -251,7 +318,7 @@ rerun_as_unprivileged() {
     : "${RUN_UNPRIVILEGED:?}"
     unset RUN_UNPRIVILEGED
 
-    error_report_dir="/temp-artifacts/"
+    error_report_dir="/rootless-artifacts/"
     readonly error_report_dir
   fi
 }
@@ -384,17 +451,22 @@ case "${working_directory:?}" in
     readonly dex_type
     ;;
   ("protocol")
+    protocol="${1:?}"
+    topology="${2:?}"
+
+    shift 2
+
     if protocol="$(
       "jq" \
         -c \
         "." \
-        <"${1:?}"
+        <<EOF
+${protocol:?}
+EOF
     )"
     then
       readonly protocol
       : "${protocol:?"Protocol JSON cannot be empty!"}"
-
-      shift
     else
       "error" "Failed to parse protocol describing JSON!"
     fi
@@ -406,13 +478,15 @@ case "${working_directory:?}" in
         --argjson "protocol" "${protocol:?}" \
         ".networks[\$protocol.dex_network].dexes[\$protocol.dex].type | \
 select(. != null)" \
-        <"${1:?}"
+        <<EOF
+${topology:?}
+EOF
     )"
     then
+      unset topology
+
       readonly dex_type
       : "${dex_type:?"DEX type cannot be null!"}"
-
-      shift
     else
       "error" "Failed to get DEX type from topology describing JSON file!"
     fi
@@ -436,7 +510,7 @@ readonly contracts_count
 for directory in \
   "artifacts" \
   "target" \
-  "temp-artifacts"
+  "rootless-artifacts"
 do
   files="$(
     cd "/${directory:?}" && \
@@ -453,7 +527,7 @@ do
   esac
 done
 
-CURRENCIES_BUILD_REPORT="/temp-artifacts/currencies.build.log"
+CURRENCIES_BUILD_REPORT="/rootless-artifacts/currencies.build.log"
 readonly CURRENCIES_BUILD_REPORT
 export CURRENCIES_BUILD_REPORT
 
@@ -484,12 +558,12 @@ do
   esac
 done
 
-output_directory="${CARGO_TARGET_DIR:?}/wasm32-unknown-unknown/\
+cargo_output_directory="${CARGO_TARGET_DIR:?}/wasm32-unknown-unknown/\
 ${mapped_build_profile:?}/"
-readonly output_directory
+readonly cargo_output_directory
 
 if files="$(
-  cd "${output_directory:?}" && \
+  cd "${cargo_output_directory:?}" && \
     "find" \
       "." \
       "(" \
@@ -555,8 +629,8 @@ do
     -Os \
     --inlining-optimizing \
     --signext-lowering \
-    -o "/temp-artifacts/${wasm_name:?}" \
-    "${output_directory}/${wasm_path:?}"
+    -o "/rootless-artifacts/${wasm_name:?}" \
+    "${cargo_output_directory}/${wasm_path:?}"
   then
     "echo" "Finished optimizing: ${wasm_name:?}"
   else
@@ -568,7 +642,7 @@ ${files:?}
 EOF
 
 if large_files="$(
-  cd "/temp-artifacts/" && \
+  cd "/rootless-artifacts/" && \
     "find" \
       "." \
       -type "f" \
@@ -592,7 +666,7 @@ esac
 while read -r wasm_path
 do
   (
-    cd "/temp-artifacts/" && \
+    cd "/rootless-artifacts/" && \
       "cosmwasm-check" \
         --available-capabilities "${cosmwasm_capabilities?}" \
         "./${wasm_path:?}"
@@ -615,12 +689,15 @@ readonly build_output_packages
 case "${build_output_packages?}" in
   ("") ;;
   (*)
-    "mkdir" "/artifacts/outputs/"
+    outputs_directory="/rootless-artifacts/outputs"
+    readonly outputs_directory
+
+    "mkdir" "/${outputs_directory:?}"
 
     while read -r build_output_package
     do
       if build_output="$(
-        cd "${output_directory:?}" && \
+        cd "${cargo_output_directory:?}" && \
           "find" \
             "." \
             -type "d" \
@@ -638,11 +715,11 @@ case "${build_output_packages?}" in
 ${build_output:?}
 EOF
             then
-              "mkdir" "/artifacts/outputs/${build_output_package:?}/"
+              "mkdir" "/${outputs_directory:?}/${build_output_package:?}/"
 
               "cp" \
-                "${output_directory:?}/${build_output:?}/"* \
-                "/artifacts/outputs/${build_output_package:?}/"
+                "${cargo_output_directory:?}/${build_output:?}/"* \
+                "/${outputs_directory:?}/${build_output_package:?}/"
             else
               "error" "Failed to retrieve first line of build script output \
     directories!"
@@ -659,7 +736,7 @@ EOF
 esac
 
 if ! checksum="$(
-  cd "/temp-artifacts/" && \
+  cd "/rootless-artifacts/" && \
     "sha256sum" \
       -- \
       "./"*".wasm"
@@ -670,7 +747,7 @@ fi
 readonly checksum
 
 if ! "tee" \
-  "/temp-artifacts/checksums.txt" \
+  "/rootless-artifacts/checksums.txt" \
   <<EOF
 
 Checksums:
