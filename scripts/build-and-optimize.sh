@@ -1,4 +1,4 @@
-#!/bin/sh -eux
+#!/bin/sh -eu
 
 ################################################################################
 ## This script shall conform to the POSIX.1 standard, a.k.a. IEEE Std 1003.1. ##
@@ -18,7 +18,7 @@
 ## environments.                                                              ##
 ################################################################################
 
-set -eux
+set -eu
 
 readonly CHECK_DEPENDENCIES_UPDATED
 
@@ -29,8 +29,6 @@ export RUSTFLAGS
 error_report_dir="/artifacts/"
 
 error() {
-  set -eu
-
   case "${#:?}" in
     ("1")
       "tee" \
@@ -294,6 +292,10 @@ rerun_as_unprivileged() {
       -R \
       "/target"
 
+    "copy_dir_contents" \
+      "/labels/" \
+      "/rootless-artifacts/"
+
     "chown" \
       -R \
       "0:0" \
@@ -316,10 +318,6 @@ rerun_as_unprivileged() {
 
     "rmdir" "/rootless-artifacts"
 
-    "copy_dir_contents" \
-      "/labels/" \
-      "/artifacts/"
-
     exit
   else
     : "${RUN_UNPRIVILEGED:?}"
@@ -338,11 +336,12 @@ check_groups() {
   real_group_ids="$("id" --real --groups)"
   readonly real_group_ids
 
-  for ids in "${group_ids:?}" "${real_group_ids:?}"
+  for ids in \
+    "${group_ids:?}" \
+    "${real_group_ids:?}"
   do
     case "${ids:?}" in
       ("0"|"0"[![:digit:]]*|*[![:digit:]]"0"[![:digit:]]*|*[![:digit:]]"0")
-      #("0"|"0"[[:digit:]]*|*[[:digit:]]"0"[[:digit:]]*|*[[:digit:]]"0")
         "error" "TODO"
         ;;
     esac
@@ -458,6 +457,21 @@ case "${working_directory:?}" in
     readonly dex_type
     ;;
   ("protocol")
+    case "${#:?}" in
+      ("0")
+        "error" "Expected protocol and topology configurations!"
+        ;;
+      ("1")
+        "error" "Got only one parameter! Most probably cause is an internal \
+error!"
+        ;;
+      ("2") ;;
+      (*)
+        "error" "Got more than the two expected parameters, containing \
+protocol and topology! Got ${#:?} arguments!"
+        ;;
+    esac
+
     protocol="${1:?}"
     topology="${2:?}"
 
@@ -543,26 +557,30 @@ for tag in \
   "${dex_type:+"dex-${dex_type:?}"}"
 do
   case "${tag?}" in
-    ("") ;;
-    (*)
-      if ! "cargo" \
-        -- \
-        "each" \
-        --tag "build" \
-        --tag "${tag:?}" \
-        "run" \
-        --exact \
-        -- \
-        "build" \
-        --profile "${mapped_build_profile:?}" \
-        --lib \
-        --frozen \
-        --target "wasm32-unknown-unknown" \
-        --target-dir "${CARGO_TARGET_DIR:?}"
-      then
-        "error" "Failed to build contracts in workspace tagged with \"${tag}\"!"
-      fi
+    ("")
+      continue
+      ;;
   esac
+
+  if ! "cargo" \
+    -- \
+    "each" \
+    --tag "build" \
+    --tag "${tag:?}" \
+    "run" \
+    --exact \
+    -- \
+    "build" \
+    --profile "${mapped_build_profile:?}" \
+    --lib \
+    --frozen \
+    --target "wasm32-unknown-unknown" \
+    --target-dir "${CARGO_TARGET_DIR:?}"
+  then
+    "error" "Failed to build contracts in workspace tagged with \"${tag}\"!"
+  fi
+
+  "echo"
 done
 
 cargo_output_directory="${CARGO_TARGET_DIR:?}/wasm32-unknown-unknown/\
@@ -573,16 +591,12 @@ if files="$(
   cd "${cargo_output_directory:?}" && \
     "find" \
       "." \
-      "(" \
-      "!" \
-      "(" \
-      -path "./?*/*" \
-      -o \
-      -path "./?*/*" \
-      ")" \
-      ")" \
       -type "f" \
       -name "*.wasm" \
+      "(" \
+      "!" \
+      -path "./?*/?**" \
+      ")" \
       -print
 )"
 then
@@ -611,8 +625,8 @@ EOF
 then
   readonly file_count
 else
-  "error" "Failed to retrieve the output directories' binaries count via \"wc\"\
-!"
+  "error" "Failed to retrieve the output directories' binaries count via \
+\"wc\"!"
 fi
 
 case "${file_count:?}" in
@@ -643,6 +657,8 @@ do
   else
     "error" "Failed to run \"wasm-opt\" on \"${wasm_name:?}\"!"
   fi
+
+  "echo"
 done \
   <<EOF
 ${files:?}
@@ -670,18 +686,20 @@ ${max_binary_size:?}:
 ${large_files:?}"
 esac
 
-while read -r wasm_path
-do
-  (
-    cd "/rootless-artifacts/" && \
+(
+  cd "/rootless-artifacts/" && \
+    while read -r wasm_path
+    do
       "cosmwasm-check" \
         --available-capabilities "${cosmwasm_capabilities?}" \
         "./${wasm_path:?}"
-  )
-done \
-  <<EOF
+
+      "echo"
+    done \
+      <<EOF
 ${files:?}
 EOF
+)
 
 case "${dex_type?}" in
   ("")
@@ -703,7 +721,7 @@ case "${build_output_packages?}" in
 
     while read -r build_output_package
     do
-      if build_output="$(
+      if ! build_output_directories="$(
         cd "${cargo_output_directory:?}" && \
           "find" \
             "." \
@@ -711,30 +729,26 @@ case "${build_output_packages?}" in
             -path "./build/${build_output_package:?}-????????????????/out"
       )"
       then
-        case "${build_output?}" in
-          ("")
-            "error" "Retrieved list of build script output directories doesn't \
-    contain \"${build_output_package:?}-<FINGERPRINT>\" directories!"
-            ;;
-          (*)
-            if read -r build_output \
-              <<EOF
-${build_output:?}
-EOF
-            then
-              "mkdir" "/${outputs_directory:?}/${build_output_package:?}/"
-
-              "cp" \
-                "${cargo_output_directory:?}/${build_output:?}/"* \
-                "/${outputs_directory:?}/${build_output_package:?}/"
-            else
-              "error" "Failed to retrieve first line of build script output \
-    directories!"
-            fi
-        esac
-      else
         "error" "Failed to list build script binaries' output directory!"
       fi
+
+      case "${build_output_directories?}" in
+        ("")
+          "error" "Retrieved list of build script output directories doesn't \
+contain \"${build_output_package:?}-<FINGERPRINT>\" directories!"
+          ;;
+        (*)
+          while read -r build_output
+          do
+            "cp" \
+              -R \
+              "/${cargo_output_directory:?}/${build_output:?}/" \
+              "/${outputs_directory:?}/"
+          done \
+            <<EOF
+${build_output_directories:?}
+EOF
+      esac
     done \
       <<EOF
 ${build_output_packages?}
@@ -753,10 +767,11 @@ then
 fi
 readonly checksum
 
+"echo"
+
 if ! "tee" \
   "/rootless-artifacts/checksums.txt" \
   <<EOF
-
 Checksums:
 ${checksum:?}
 EOF

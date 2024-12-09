@@ -155,7 +155,7 @@ RUN --mount=type=bind,source="./",target="/code/",readonly \
       "tag=%s / %s" \
       "${tag_commit:?}" \
       "${tag:?}" \
-      >"/labels/release-version.txt" \
+      >"/labels/release-version.txt"
 
 ARG rust_ver
 
@@ -176,9 +176,11 @@ ARG rust_ver
 LABEL rust_ver="${rust_ver:?}"
 
 RUN rustc_bin="$("rustup" "which" "rustc")" && \
-    "${rustc_bin:?}" \
-      --version \
-      >"/labels/rust-version.txt"
+      rust_version="$("${rustc_bin:?}" --version)" && \
+      "printf" \
+        "%s" \
+        "${rust_version:?}" \
+        >"/labels/rust-version.txt"
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
