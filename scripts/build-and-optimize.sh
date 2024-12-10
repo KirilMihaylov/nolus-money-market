@@ -50,6 +50,7 @@ passed arguments: ${#:?}."
 is_privileged() (
   user_id="$("id" --user)"
   readonly user_id
+
   real_user_id="$(
     "id" \
       --real \
@@ -259,18 +260,17 @@ rerun_as_unprivileged() {
       "rootless-artifacts"
     do
       if ! "mkdir" \
-        -m "0755" \
+        -m "0557" \
         "/${directory:?}"
       then
         "error" "Failed to create \"/${directory:?}\" directory!"
       fi
-
-      "chown" \
-        "1000:1000" \
-        "/${directory:?}"
     done
 
-    if test -r "${protocol_json:?}" -o -r "${topology_json:?}"
+    if test \
+      -r "${protocol_json:?}" \
+      -o \
+      -r "${topology_json:?}"
     then
       protocol="$("cat" "${protocol_json:?}")"
       readonly protocol
