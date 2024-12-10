@@ -47,9 +47,9 @@ RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
 
 FROM debian-updated AS configuration
 
-RUN ["mkdir", "/configuration"]
+RUN ["mkdir", "-m", "0755", "/configuration"]
 
-RUN ["mkdir", "/configuration/build-profiles"]
+RUN ["mkdir", "-m", "0755", "/configuration/build-profiles"]
 
 ARG platform_contracts_count
 
@@ -130,14 +130,14 @@ RUN "mv" \
 
 FROM debian-updated AS release-version-label
 
-RUN ["mkdir", "/labels/"]
+RUN ["mkdir", "-m", "0755", "/labels"]
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
   ["apt", "install", "--yes", "coreutils", "git"]
 
 RUN --mount=type=bind,source="./",target="/code/",readonly \
-  cd "/code/" && \
+  cd "/code" && \
     tag="$("git" "describe" --tags)" && \
     readonly tag && \
     latest_tag="$("git" "describe" --tags --abbrev="0")" && \
