@@ -240,7 +240,7 @@ WORKDIR "/"
 
 RUN ["mkdir", "-m", "0111", "/build"]
 
-ENTRYPOINT ["/bin/sh", "-eu", "/build/build.sh"]
+ENTRYPOINT ["/build/build.sh"]
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
