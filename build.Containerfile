@@ -43,7 +43,7 @@ RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
-  ["apt", "upgrade"]
+  ["apt", "upgrade", "--yes"]
 
 FROM debian-updated AS configuration
 
