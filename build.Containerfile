@@ -47,9 +47,9 @@ RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
 
 FROM debian-updated AS configuration
 
-RUN ["mkdir", "-m", "0755", "/configuration"]
+RUN ["mkdir", "-m", "0555", "/configuration"]
 
-RUN ["mkdir", "-m", "0755", "/configuration/build-profiles"]
+RUN ["mkdir", "-m", "0555", "/configuration/build-profiles"]
 
 ARG platform_contracts_count
 
@@ -102,7 +102,7 @@ RUN "printf" \
 
 FROM debian-updated AS wasm-opt
 
-RUN ["mkdir", "-m", "0755", "/labels"]
+RUN ["mkdir", "-m", "0555", "/labels"]
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
@@ -130,7 +130,7 @@ RUN "mv" \
 
 FROM debian-updated AS release-version-label
 
-RUN ["mkdir", "-m", "0755", "/labels"]
+RUN ["mkdir", "-m", "0555", "/labels"]
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
@@ -161,7 +161,7 @@ ARG rust_ver
 
 FROM docker.io/rust:${rust_ver:?}-slim AS rust
 
-RUN ["mkdir", "-m", "0755", "/labels"]
+RUN ["mkdir", "-m", "0555", "/labels"]
 
 RUN "chmod" "-R" "a-w" "${CARGO_HOME:?}"
 
@@ -188,7 +188,11 @@ RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
-  ["apt", "upgrade"]
+  ["apt", "upgrade", "--yes"]
+
+FROM rust AS rust-with-wasm32-target
+
+RUN ["rustup", "target", "add", "wasm32-unknown-unknown"]
 
 FROM rust AS cosmwasm-check
 
@@ -199,32 +203,6 @@ RUN "cargo" \
     "--force" \
     "--jobs" "1" \
     "cosmwasm-check@${cosmwasm_check_ver:?}"
-
-FROM rust AS cargo-each
-
-RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
-  [ \
-    "cargo", \
-      "fetch", \
-      "--manifest-path", "/tools/cargo-each/Cargo.toml", \
-      "--locked" \
-  ]
-
-RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
-  --mount=type=tmpfs,target="/target/" \
-  [ \
-    "cargo", \
-      "install", \
-      "--force", \
-      "--jobs", "1", \
-      "--locked", \
-      "--path", "/tools/cargo-each/", \
-      "--target-dir", "/target/" \
-  ]
-
-FROM rust AS rust-with-wasm32-target
-
-RUN ["rustup", "target", "add", "wasm32-unknown-unknown"]
 
 FROM rust-with-wasm32-target AS builder-base
 
@@ -244,7 +222,7 @@ ENTRYPOINT ["/build/build.sh"]
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
-  ["apt", "install", "--yes", "coreutils", "jq", "util-linux"]
+  ["apt", "install", "--yes", "coreutils", "jq", "procps", "util-linux"]
 
 ARG check_dependencies_updated
 
@@ -282,6 +260,36 @@ COPY \
   "/usr/local/cargo/bin/cosmwasm-check" \
   "/usr/local/cargo/bin/"
 
+FROM rust AS cargo-each
+
+COPY \
+  --chmod="0444" \
+  --chown="0:0" \
+  "./.cargo" \
+  "/.cargo"
+
+RUN ["chmod", "0555", "/.cargo"]
+
+RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
+  [ \
+    "cargo", \
+      "fetch", \
+      "--manifest-path", "/tools/cargo-each/Cargo.toml", \
+      "--locked" \
+  ]
+
+RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
+  --mount=type=tmpfs,target="/target/" \
+  [ \
+    "cargo", \
+      "install", \
+      "--force", \
+      "--jobs", "1", \
+      "--locked", \
+      "--path", "/tools/cargo-each/", \
+      "--target-dir", "/target/" \
+  ]
+
 FROM builder-base AS builder
 
 COPY \
@@ -292,26 +300,32 @@ COPY \
   "/usr/local/cargo/bin/"
 
 COPY \
-  --chown="0:0" \
-  "./.cargo" \
-  "/.cargo"
-
-RUN ["chmod", "-R", "a-w", "/.cargo"]
-
-COPY \
-  --chown="0:0" \
-  "./platform" \
-  "/platform"
-
-RUN ["chmod", "-R", "a-w", "/platform"]
-
-COPY \
+  --chmod="0444" \
   --chown="0:0" \
   --from=release-version-label \
   "/labels" \
   "/labels"
 
-RUN ["chmod", "-R", "a-w", "/labels"]
+RUN ["chmod", "0555", "/labels"]
+
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  "./scripts/build-and-optimize.sh" \
+  "/build/build.sh"
+
+COPY \
+  --chmod="0444" \
+  --chown="0:0" \
+  "./platform" \
+  "/platform"
+
+RUN [ \
+    "/usr/bin/find", \
+    "/platform", \
+    "-type", "d", \
+    "-exec", "/usr/bin/chmod", "0555", "{}", ";" \
+  ]
 
 ARG check_dependencies_updated
 
@@ -334,12 +348,6 @@ boolean value!" && \
   ) && \
     "check_and_fetch" "/platform/" && \
     "check_and_fetch" "/protocol/"
-
-COPY \
-  --chmod="0555" \
-  --chown="0:0" \
-  "./scripts/build-and-optimize.sh" \
-  "/build/build.sh"
 
 FROM builder AS platform-builder
 
