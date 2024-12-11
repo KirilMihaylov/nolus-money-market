@@ -231,12 +231,25 @@ ENV CHECK_DEPENDENCIES_UPDATED="${check_dependencies_updated:?}"
 LABEL check_dependencies_updated="${check_dependencies_updated:?}"
 
 COPY \
+  --chmod="0444" \
   --chown="0:0" \
   --from=configuration \
   "/configuration" \
   "/configuration"
 
-RUN ["chmod", "-R", "a-w", "/configuration"]
+RUN [ \
+    "/usr/bin/find", \
+    "/configuration", \
+    "-type", "d", \
+    "-exec", "/usr/bin/chmod", "0555", "{}", ";" \
+  ]
+
+COPY \
+  --chmod="0111" \
+  --chown="0:0" \
+  --from=cosmwasm-check \
+  "/usr/local/cargo/bin/cosmwasm-check" \
+  "/usr/local/cargo/bin/"
 
 COPY \
   --chmod="0111" \
@@ -251,14 +264,12 @@ COPY \
   "/labels" \
   "/labels"
 
-RUN ["chmod", "-R", "a-w", "/labels"]
-
-COPY \
-  --chmod="0111" \
-  --chown="0:0" \
-  --from=cosmwasm-check \
-  "/usr/local/cargo/bin/cosmwasm-check" \
-  "/usr/local/cargo/bin/"
+RUN [ \
+    "/usr/bin/find", \
+    "/labels", \
+    "-type", "d", \
+    "-exec", "/usr/bin/chmod", "0555", "{}", ";" \
+  ]
 
 FROM rust AS cargo-each
 
@@ -268,7 +279,12 @@ COPY \
   "./.cargo" \
   "/.cargo"
 
-RUN ["chmod", "0555", "/.cargo"]
+RUN [ \
+    "/usr/bin/find", \
+    "/.cargo", \
+    "-type", "d", \
+    "-exec", "/usr/bin/chmod", "0555", "{}", ";" \
+  ]
 
 RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
   [ \
@@ -306,7 +322,12 @@ COPY \
   "/labels" \
   "/labels"
 
-RUN ["chmod", "0555", "/labels"]
+RUN [ \
+    "/usr/bin/find", \
+    "/labels", \
+    "-type", "d", \
+    "-exec", "/usr/bin/chmod", "0555", "{}", ";" \
+  ]
 
 COPY \
   --chmod="0555" \
@@ -364,15 +385,27 @@ RUN ["chown", "0:0", "/build-configuration"]
 WORKDIR "/protocol/"
 
 COPY \
+  --chmod="0444" \
   --chown="0:0" \
   "./protocol" \
   "/protocol"
 
-RUN ["chmod", "-R", "a-w", "/protocol"]
+RUN [ \
+    "/usr/bin/find", \
+    "/protocol", \
+    "-type", "d", \
+    "-exec", "/usr/bin/chmod", "0555", "{}", ";" \
+  ]
 
 COPY \
+  --chmod="0444" \
   --chown="0:0" \
   "./tools" \
   "/tools"
 
-RUN ["chmod", "-R", "a-w", "/tools"]
+RUN [ \
+    "/usr/bin/find", \
+    "/tools", \
+    "-type", "d", \
+    "-exec", "/usr/bin/chmod", "0555", "{}", ";" \
+  ]
