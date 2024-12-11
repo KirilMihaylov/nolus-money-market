@@ -102,7 +102,7 @@ RUN "printf" \
 
 FROM debian-updated AS wasm-opt
 
-RUN ["mkdir", "-m", "0755", "/labels/"]
+RUN ["mkdir", "-m", "0755", "/labels"]
 
 RUN --mount=type=cache,target="/var/cache/apt",sharing="locked" \
   --mount=type=cache,target="/var/lib/apt",sharing="locked" \
@@ -208,7 +208,7 @@ RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
       "fetch", \
       "--manifest-path", "/tools/cargo-each/Cargo.toml", \
       "--locked" \
-    ]
+  ]
 
 RUN --mount=type=bind,source="./tools/",target="/tools/",readonly \
   --mount=type=tmpfs,target="/target/" \

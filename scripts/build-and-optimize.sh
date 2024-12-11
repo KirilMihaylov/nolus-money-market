@@ -21,9 +21,12 @@
 ################################################################################
 ## Utilities used that are not defined by the POSIX standard:                 ##
 ## * "setpriv" from "util-linux"                                              ##
+## * "jq" from self-named package                                             ##
 ## * "cargo" from Rustup toolchain distribution                               ##
+## * "cargo-each" from local sources                                          ##
+## * "wasm-opt" from WebAssembly/Binaryen                                     ##
 ## * "cosmwasm-check" from self-named package from "crates.io"                ##
-## * "sha256sum" from "coreutils"                                             ##
+## * "sha256sum" from GNU "coreutils"                                         ##
 ################################################################################
 
 set -eu
