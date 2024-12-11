@@ -329,11 +329,7 @@ RUN [ \
     "-exec", "/usr/bin/chmod", "0555", "{}", ";" \
   ]
 
-COPY \
-  --chmod="0555" \
-  --chown="0:0" \
-  "./scripts/build-and-optimize.sh" \
-  "/build/build.sh"
+# TODO copy build.sh
 
 COPY \
   --chmod="0444" \
@@ -369,6 +365,12 @@ boolean value!" && \
   ) && \
     "check_and_fetch" "/platform/" && \
     "check_and_fetch" "/protocol/"
+
+COPY \
+  --chmod="0555" \
+  --chown="0:0" \
+  "./scripts/build-and-optimize.sh" \
+  "/build/build.sh"
 
 FROM builder AS platform-builder
 

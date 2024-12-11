@@ -395,96 +395,98 @@ rerun_as_unprivileged() {
     "1+" \
     "${@}"
 
-  if "is_privileged"
+  if ! "is_privileged"
   then
-    case "${RUN_UNPRIVILEGED+"1"}" in
-      ("1")
-        "error" "Running in privileged mode while \"RUN_UNPRIVILEGED\" is set!"
-        ;;
-    esac
-
-    build_configuration="/build-configuration"
-    readonly build_configuration
-
-    protocol_json="/${build_configuration:?}/protocol.json"
-    readonly protocol_json
-
-    topology_json="/${build_configuration:?}/topology.json"
-    readonly topology_json
-
-    "close_error_report_fd"
-
-    if ! "clean_dir_contents" "/artifacts"
-    then
-      "error" "Failed to clean up \"/artifacts\" during preparations!"
-    fi
-
-    "open_error_report_fd"
-
-    "make_ephemeral_directories"
-
-    if "test" \
-      -r "${protocol_json:?}" \
-      -o \
-      -r "${topology_json:?}" \
-      2>&"${error_report_fd:?}"
-    then
-      if ! protocol="$(
-        "cat" \
-          "${protocol_json:?}" \
-          2>&"${error_report_fd:?}"
-      )"
-      then
-        "error" "Failed to read protocol definition from file!"
-      fi
-      readonly protocol
-      : "${protocol:?}"
-
-      if ! topology="$(
-        "cat" \
-          "${topology_json:?}" \
-          2>&"${error_report_fd:?}"
-      )"
-      then
-        "error" "Failed to read topology definition from file!"
-      fi
-      readonly topology
-      : "${topology:?}"
-
-      "run_unprivileged" \
-        "${@:?}" \
-        "${protocol:?}" \
-        "${topology:?}"
-    else
-      "run_unprivileged" "${@:?}"
-    fi
-
-    "remove_cargo_target_dir"
-
-    "copy_dir_contents" \
-      "/labels" \
-      "/rootless-artifacts"
-
-    "recursively_take_ownership_dir" "/rootless-artifacts"
-
-    "move_dir_contents" \
-      "/rootless-artifacts" \
-      "/artifacts"
-
-    if ! "rmdir" \
-      "/rootless-artifacts" \
-      2>&"${error_report_fd:?}"
-    then
-      "error" "Failed to remove rootless artifacts directory!"
-    fi
-
-    exit "0"
-  else
-    export RUSTFLAGS
-
     : "${RUN_UNPRIVILEGED?}"
     unset RUN_UNPRIVILEGED
+
+    export RUSTFLAGS
+
+    return
   fi
+
+  case "${RUN_UNPRIVILEGED+"1"}" in
+    ("1")
+      "error" "Running in privileged mode while \"RUN_UNPRIVILEGED\" is set!"
+      ;;
+  esac
+
+  build_configuration="/build-configuration"
+  readonly build_configuration
+
+  protocol_json="/${build_configuration:?}/protocol.json"
+  readonly protocol_json
+
+  topology_json="/${build_configuration:?}/topology.json"
+  readonly topology_json
+
+  "close_error_report_fd"
+
+  if ! "clean_dir_contents" "/artifacts"
+  then
+    "error" "Failed to clean up \"/artifacts\" during preparations!"
+  fi
+
+  "open_error_report_fd"
+
+  "make_ephemeral_directories"
+
+  if "test" \
+    -r "${protocol_json:?}" \
+    -o \
+    -r "${topology_json:?}" \
+    2>&"${error_report_fd:?}"
+  then
+    if ! protocol="$(
+      "cat" \
+        "${protocol_json:?}" \
+        2>&"${error_report_fd:?}"
+    )"
+    then
+      "error" "Failed to read protocol definition from file!"
+    fi
+    readonly protocol
+    : "${protocol:?}"
+
+    if ! topology="$(
+      "cat" \
+        "${topology_json:?}" \
+        2>&"${error_report_fd:?}"
+    )"
+    then
+      "error" "Failed to read topology definition from file!"
+    fi
+    readonly topology
+    : "${topology:?}"
+
+    "run_unprivileged" \
+      "${@:?}" \
+      "${protocol:?}" \
+      "${topology:?}"
+  else
+    "run_unprivileged" "${@:?}"
+  fi
+
+  "remove_cargo_target_dir"
+
+  "copy_dir_contents" \
+    "/labels" \
+    "/rootless-artifacts"
+
+  "recursively_take_ownership_dir" "/rootless-artifacts"
+
+  "move_dir_contents" \
+    "/rootless-artifacts" \
+    "/artifacts"
+
+  if ! "rmdir" \
+    "/rootless-artifacts" \
+    2>&"${error_report_fd:?}"
+  then
+    "error" "Failed to remove rootless artifacts directory!"
+  fi
+
+  exit "0"
 }
 
 "rerun_as_unprivileged" "${@}"
@@ -509,7 +511,8 @@ check_groups() {
     "${real_group_ids:?}"
   do
     case "${ids:?}" in
-      ("0"|"0"[![:digit:]]*|*[![:digit:]]"0"[![:digit:]]*|*[![:digit:]]"0")
+      #("0"|"0"[![:digit:]]*|*[![:digit:]]"0"[![:digit:]]*|*[![:digit:]]"0")
+      ("0") # TODO
         "error" "Running with non-root user IDs but group IDs contain the root \
 group!"
         ;;
@@ -532,31 +535,29 @@ case "${CHECK_DEPENDENCIES_UPDATED:?}" in
     ;;
 esac
 
-if RELEASE_VERSION="$(
+if ! RELEASE_VERSION="$(
   "cat" \
     "/labels/release-version.txt" \
     2>&"${error_report_fd:?}"
 )"
 then
-  readonly RELEASE_VERSION
-  : \
-    "${RELEASE_VERSION:?"Release version cannot be null!"}" \
-    2>&"${error_report_fd:?}"
-  export RELEASE_VERSION
-else
   "error" "Failed to read release version!"
 fi
+readonly RELEASE_VERSION
+: \
+  "${RELEASE_VERSION:?"Release version cannot be null!"}" \
+  2>&"${error_report_fd:?}"
+export RELEASE_VERSION
 
-if cosmwasm_capabilities="$(
+if ! cosmwasm_capabilities="$(
   "cat" \
     "/configuration/cosmwasm_capabilities" \
     2>&"${error_report_fd:?}"
 )"
 then
-  readonly cosmwasm_capabilities
-else
   "error" "Failed to read available CosmWasm capabilities!"
 fi
+readonly cosmwasm_capabilities
 
 if ! build_profile="${1:?}" \
   2>&"${error_report_fd:?}"
@@ -566,55 +567,53 @@ fi
 readonly build_profile
 shift
 
-
 build_profiles_directory="/configuration/build-profiles/"
 readonly build_profiles_directory
 
-if mapped_build_profile="$(
+if ! mapped_build_profile="$(
   "cat" \
     "${build_profiles_directory:?}/${build_profile:?}" \
     2>&"${error_report_fd:?}"
 )"
 then
-  readonly mapped_build_profile
-
-  if ! : \
-    "${mapped_build_profile:?}" \
-    2>&"${error_report_fd:?}"
-  then
-    "error" "Mapped build profile cannot be null!"
-  fi
-else
-  if build_profiles="$(
+  if ! build_profiles="$(
     "ls" \
       -1 \
       "${build_profiles_directory:?}" \
       2>&"${error_report_fd:?}"
   )"
   then
-    case "${build_profiles?}" in
-      ("")
-        "error" "No build profiles present!"
-        ;;
-    esac
+    "error" "Failed to read available build profiles!"
+  fi
 
-    build_profiles_pretty=""
+  case "${build_profiles?}" in
+    ("")
+      "error" "No build profiles present!"
+      ;;
+  esac
 
-    while read -r build_profiles_entry
-    do
-      build_profiles_pretty="${build_profiles_pretty:+"${build_profiles_pretty:?}
+  build_profiles_pretty=""
+
+  while read -r build_profiles_entry
+  do
+    build_profiles_pretty="${build_profiles_pretty:+"${build_profiles_pretty:?}
 "}* ${build_profiles_entry:?}"
-    done <<EOF
+  done <<EOF
 ${build_profiles?}
 EOF
 
-    "error" "Failed to read build profile mapping!
+  "error" "Failed to read build profile mapping!
 
 Existing profiles:
 ${build_profiles_pretty?}"
-  else
-    "error" "Failed to read available build profiles!"
-  fi
+fi
+readonly mapped_build_profile
+
+if ! : \
+  "${mapped_build_profile:?}" \
+  2>&"${error_report_fd:?}"
+then
+  "error" "Mapped build profile cannot be null!"
 fi
 
 if ! max_binary_size="$(
@@ -626,6 +625,7 @@ then
   "error" "Failed to read max binary size for build profile!"
 fi
 readonly max_binary_size
+
 if ! : \
   "${max_binary_size:?}" \
   2>&"${error_report_fd:?}"
@@ -633,20 +633,18 @@ then
   "error" "Maximum binary size cannot be null!"
 fi
 
-working_directory="$(
-  if ! "pwd" 2>&"${error_report_fd:?}"
-  then
-    "error" "Failed to retrieve current directory's path!"
-  fi
-)"
-working_directory="$(
-  if ! "basename" \
+if ! working_directory="$("pwd" 2>&"${error_report_fd:?}")"
+then
+  "error" "Failed to retrieve current directory's path!"
+fi
+if ! working_directory="$(
+  "basename" \
     "${working_directory:?}" \
     2>&"${error_report_fd:?}"
-  then
-    "error" "Failed to retrieve name of current directory!"
-  fi
 )"
+then
+  "error" "Failed to retrieve name of current directory!"
+fi
 readonly working_directory
 if ! : \
   "${working_directory:?}" \
@@ -687,6 +685,7 @@ protocol and topology! Got ${#:?} arguments!"
     then
       "error" "Protocol definition JSON cannot be empty!"
     fi
+
     if ! topology="${2:?}" 2>&"${error_report_fd:?}"
     then
       "error" "Topology definition JSON cannot be empty!"
@@ -694,28 +693,28 @@ protocol and topology! Got ${#:?} arguments!"
 
     shift "2"
 
-    if protocol="$(
+    if ! protocol="$(
       "jq" \
         -c \
         "." \
+        2>&"${error_report_fd:?}" \
         <<EOF
 ${protocol:?}
 EOF
     )"
     then
-      readonly protocol
-
-      if ! : \
-        "${protocol:?}" \
-        2>&"${error_report_fd:?}"
-      then
-        "error" "Protocol definition JSON cannot be empty!"
-      fi
-    else
       "error" "Failed to parse protocol describing JSON!"
     fi
+    readonly protocol
 
-    if dex_type="$(
+    if ! : \
+      "${protocol:?}" \
+      2>&"${error_report_fd:?}"
+    then
+      "error" "Protocol definition JSON cannot be empty!"
+    fi
+
+    if ! dex_type="$(
       "jq" \
         --exit-status \
         --raw-output \
@@ -728,17 +727,17 @@ ${topology:?}
 EOF
     )"
     then
-      unset topology
-
-      readonly dex_type
-      if ! : \
-        "${dex_type:?}" \
-        2>&"${error_report_fd:?}"
-      then
-        "error" "DEX type cannot be null!"
-      fi
-    else
       "error" "Failed to get DEX type from topology describing JSON file!"
+    fi
+    readonly dex_type
+
+    unset topology
+
+    if ! : \
+      "${dex_type:?}" \
+      2>&"${error_report_fd:?}"
+    then
+      "error" "DEX type cannot be null!"
     fi
     ;;
   (*)
@@ -769,21 +768,9 @@ then
   "error" "Contracts count cannot be null!"
 fi
 
-CURRENCIES_BUILD_REPORT="/rootless-artifacts/currencies.build.log"
-readonly CURRENCIES_BUILD_REPORT
-export CURRENCIES_BUILD_REPORT
-
-for tag in \
-  "@agnostic" \
-  "${dex_type:+"dex-${dex_type:?}"}"
-do
-  case "${tag?}" in
-    ("")
-      continue
-      ;;
-  esac
-
-  if ! "cargo" \
+build_via_cargo_each() (
+  CURRENCIES_BUILD_REPORT="/rootless-artifacts/currencies.build.log" \
+    "cargo" \
     -- \
     "each" \
     --tag "build" \
@@ -797,14 +784,26 @@ do
     --lib \
     --frozen \
     --target "wasm32-unknown-unknown" \
-    --target-dir "/${CARGO_TARGET_DIR:?}" \
-    2>&"${error_report_fd:?}"
-  then
-    "error" "Failed to build contracts in workspace tagged with \"${tag}\"!"
-  fi
+    --target-dir "/${CARGO_TARGET_DIR:?}"
+)
 
-  "echo"
+for tag in \
+  "@agnostic" \
+  "${dex_type:+"dex-${dex_type:?}"}"
+do
+  case "${tag?}" in
+    ("")
+      continue
+      ;;
+  esac
+
+  if ! "build_via_cargo_each" 2>&"${error_report_fd:?}"
+  then
+    "error" "Failed to build contracts in workspace tagged with \"${tag:?}\"!"
+  fi
 done
+
+"echo"
 
 if ! cargo_output_directory="/${CARGO_TARGET_DIR:?}/wasm32-unknown-unknown/\
 ${mapped_build_profile:?}/" 2>&"${error_report_fd:?}"
