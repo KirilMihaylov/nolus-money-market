@@ -106,28 +106,46 @@ then
   "open_error_report_fd"
 fi
 
-assert_arguments_count() (
-  expected_number_of_arguments="${1:?}"
-  readonly expected_number_of_arguments
+assert_arg_count() (
+  argument_count="${1:?}"
+  readonly argument_count
 
-  shift
+  expected_argument_count="${2:?}"
+  readonly expected_argument_count
 
-  if ! shift \
-    "${expected_number_of_arguments%"+"}" \
-    2>&"${error_report_fd:?}"
+  if ! shift "2"
   then
-    "error" "Got less than the expected at least \
-${expected_number_of_arguments%"+"} arguments!"
+    "error" "Got less than the expected two arguments, the argument count and \
+expected argument count!"
   fi
 
-  case "${expected_number_of_arguments:?}" in
-    (*"+") ;;
+  stripped_expected_argument_count="${expected_argument_count%"+"}"
+  readonly stripped_expected_argument_count
+
+  case "${#:?}" in
+    ("0") ;;
     (*)
-      case "${#:?}" in
-        ("0") ;;
+      "error" "Got more than two arguments when two were expected!"
+      ;;
+  esac
+
+  if ! difference="$((argument_count - stripped_expected_argument_count))"
+  then
+    "error" "Failed to calculate difference between expected and actual \
+argument count!"
+  fi
+  readonly difference
+
+  case "${difference:?}" in
+    ("-"*)
+      "error" "Assertion failed! Got less than the expected argument count!"
+      ;;
+    ("0") ;;
+    (*)
+      case "${expected_argument_count:?}" in
+        (*"+") ;;
         (*)
-          "error" "Got more than the expected exactly \
-${expected_number_of_arguments:?} arguments!"
+          "error" "Assertion failed! Got more than the expected argument count!"
           ;;
       esac
       ;;
@@ -136,9 +154,9 @@ ${expected_number_of_arguments:?} arguments!"
 
 # shellcheck disable=SC2120
 is_privileged() (
-  "assert_arguments_count" \
-    "0" \
-    "${@}"
+  "assert_arg_count" \
+    "${#:?}" \
+    "0"
 
   user_id="$(
     "id" \
@@ -177,9 +195,9 @@ exec_in_child_shell() (
 
   shift "2"
 
-  "assert_arguments_count" \
-    "${expected_number_of_arguments:?}" \
-    "${@}"
+  "assert_arg_count" \
+    "${#:?}" \
+    "${expected_number_of_arguments:?}"
 
   if "is_error_report_fd_open"
   then
@@ -220,9 +238,9 @@ find \
 
 # shellcheck disable=SC2120
 make_ephemeral_directories() (
-  "assert_arguments_count" \
-    "0" \
-    "${@}"
+  "assert_arg_count" \
+    "${#:?}" \
+    "0"
 
   for directory in \
     "target" \
@@ -239,9 +257,9 @@ make_ephemeral_directories() (
 )
 
 run_unprivileged() {
-  "assert_arguments_count" \
-    "1+" \
-    "${@}"
+  "assert_arg_count" \
+    "${#:?}" \
+    "1+"
 
   if ! RUN_UNPRIVILEGED="1" \
     "setpriv" \
@@ -259,9 +277,9 @@ run_unprivileged() {
 
 # shellcheck disable=SC2120
 remove_cargo_target_dir() {
-  "assert_arguments_count" \
-    "0" \
-    "${@}"
+  "assert_arg_count" \
+    "${#:?}" \
+    "0"
 
   if ! "rm" \
     -R \
@@ -306,9 +324,9 @@ find \
 )
 
 recursively_take_ownership_dir() {
-  "assert_arguments_count" \
-    "1" \
-    "${@}"
+  "assert_arg_count" \
+    "${#:?}" \
+    "1"
 
   if ! "chown" \
     -R \
@@ -328,7 +346,7 @@ set_permissions_of_contents() {
 unexpected_file_type_script="\
 \"echo\" \"Unexpected file type!\" >&2
 
-\"kill\" \"\${1:?}\""
+\"kill\" \"${$:?}\""
 
 find \
   "." \
@@ -336,15 +354,23 @@ find \
   "(" \
   "(" \
   -type "d" \
+  "(" \
   -exec "chmod" "0755" "{}" ";" \
+  -o
+  -exec "kill" "${$:?}" ";" \
+  ")" \
   ")" \
   -o \
   "(" \
   -type "f" \
+  "(" \
   -exec "chmod" "0644" "{}" ";" \
+  -o
+  -exec "kill" "${$:?}" ";" \
+  ")" \
   ")" \
   -o \
-  -exec "sh" "-c" "${unexpected_file_type_script:?}" "sh" "${$:?}" ";" \
+  -exec "sh" "-c" "${unexpected_file_type_script:?}" ";" \
   ")"'
 
   if ! "exec_in_child_shell" \
@@ -391,9 +417,9 @@ find \
 )
 
 rerun_as_unprivileged() {
-  "assert_arguments_count" \
-    "1+" \
-    "${@}"
+  "assert_arg_count" \
+    "${#:?}" \
+    "1+"
 
   if ! "is_privileged"
   then
@@ -511,8 +537,7 @@ check_groups() {
     "${real_group_ids:?}"
   do
     case "${ids:?}" in
-      #("0"|"0"[![:digit:]]*|*[![:digit:]]"0"[![:digit:]]*|*[![:digit:]]"0")
-      ("0") # TODO
+      ("0"|"0"[![:digit:]]*|*[![:digit:]]"0"[![:digit:]]*|*[![:digit:]]"0")
         "error" "Running with non-root user IDs but group IDs contain the root \
 group!"
         ;;
@@ -591,6 +616,17 @@ then
       "error" "No build profiles present!"
       ;;
   esac
+
+  if ! build_profiles="$(
+    "sort" \
+      2>&"${error_report_fd:?}" \
+      <<EOF
+${build_profiles:?}
+EOF
+  )"
+  then
+    "error" "Failed to sort build profiles via \"sort\"!"
+  fi
 
   build_profiles_pretty=""
 
